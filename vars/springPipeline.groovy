@@ -2,6 +2,8 @@ def call(Map config) {
     properties([
             disableConcurrentBuilds(abortPrevious: true)
     ])
+
+    @Library('maven-lib@1.0.5') _
     def PROJECT_NAME = config.projectName
     def SUBMODULE = config.get('submodule', '')
 
