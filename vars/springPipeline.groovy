@@ -5,9 +5,12 @@ def call(Map config) {
 
     def PROJECT_NAME = config.projectName
     def SUBMODULE = config.get('submodule', '')
-
     node {
         cleanWs()
+
+        def jdkHome = tool name: config.get('jdk', 'openjdk-17-jdk'), type: 'jdk'
+        env.JAVA_HOME = "${jdkHome}"
+        env.PATH = "${jdkHome}/bin:${env.PATH}"
 
         stage('Checkout') {
             checkout scm
