@@ -25,6 +25,9 @@ def call(Map config) {
         stage('Build && Test') {
             mvn("clean install -U -Dmaven.repo.local=/root/.m2/repository/ -ntp")
         }
+        stage('archieveArtifacts') {
+                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+        }
 
         if (!isPR() && env.BRANCH_NAME == 'develop') {
             stage('SonarQube Analysis') {
