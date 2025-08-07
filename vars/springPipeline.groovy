@@ -2,6 +2,8 @@ def call(Map config) {
     properties([
             disableConcurrentBuilds(abortPrevious: true)
     ])
+    def commitAuthor
+    def commitMessage
 
     def PROJECT_NAME = config.projectName
     def SUBMODULE = config.get('submodule', '')
@@ -9,15 +11,22 @@ def call(Map config) {
         cleanWs()
 
         def jdkHome = tool name: config.get('jdk', 'openjdk-17-jdk'), type: 'jdk'
-        env.JAVA_HOME = "${jdkHome}"
-        env.PATH = "${jdkHome}/bin:${env.PATH}"
+        //env.JAVA_HOME = "${jdkHome}"
+        //env.PATH = "${jdkHome}/bin:${env.PATH}"
+        useJdk(jdkHome)
 
         stage('Checkout') {
             checkout scm
+            commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
+            commitMessage = sh(script: "git log -1 --pretty=format:'%s'", returnStdout: true).trim()
         }
+
 
         stage('Build && Test') {
             mvn("clean install -U -Dmaven.repo.local=/root/.m2/repository/ -ntp")
+        }
+        stage('archieveArtifacts') {
+                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
         }
 
         if (!isPR() && env.BRANCH_NAME == 'develop') {
@@ -30,24 +39,27 @@ def call(Map config) {
         }
 
         if (!isPR() && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
-            def repoName = env.BRANCH_NAME == 'master' ?
-                    'ssh://git@bitbucket.dada-tuda.ru:7999/dada/prod-argo.git' :
-                    'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
-
             stage('Docker Deploy && Deploy to ArgoCD') {
+                def values
+                if(env.BRANCH_NAME == 'master') {
+                    values = "helm/spring/services/${PROJECT_NAME}/values-prod.yaml"
+                } else {
+                    values = "helm/spring/services/${PROJECT_NAME}/values-dev.yaml"
+                }
                 def buildPath = SUBMODULE ? "-pl ${SUBMODULE}" : ""
-                def result = deployDockerImageToNexus(
-                        PROJECT_NAME,
+                def result = deployDockerImageToNexus("${PROJECT_NAME}-service",
                         'dada',
-                        "-Dmaven.repo.local=/root/.m2/repository/ -ntp -U ${buildPath}"
-                )
+                        "-Dmaven.repo.local=/root/.m2/repository/ -ntp -U ${buildPath}")
                 deployToArgo(
-                        repoName,
-                        "helm/spring/services/${PROJECT_NAME}/values.yaml",
+                        'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
+                        values,
                         result,
+                        commitAuthor,
+                        commitMessage,
                         'develop'
                 )
             }
         }
     }
 }
+
