@@ -10,7 +10,7 @@ def call(Map config) {
     node {
         cleanWs()
 
-        if (config.get('jdk') != null || 'openjdk-17-jdk'.equalsIgnoreCase(config.get('jdk'))) {
+        if (config.get('jdk') != null || !'openjdk-17-jdk'.equalsIgnoreCase(config.get('jdk'))) {
             def jdkHome = tool name: config.get('jdk'), type: 'jdk'
             //env.JAVA_HOME = "${jdkHome}"
             //env.PATH = "${jdkHome}/bin:${env.PATH}"
