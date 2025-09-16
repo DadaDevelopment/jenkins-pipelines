@@ -9,9 +9,7 @@ def call(Map config) {
     def SUBMODULE = config.get('submodule', '')
     node {
         cleanWs()
-
-        def jdkHome = tool name: config.get('jdk', "openjdk-17-jdk"), type: 'jdk'
-        useJdk(jdkHome)
+        useJdk(config.get('jdk'))
 
         stage('Checkout') {
             checkout scm
