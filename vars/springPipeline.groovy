@@ -13,7 +13,9 @@ def call(Map config) {
         def jdkHome = tool name: config.get('jdk', 'openjdk-17-jdk'), type: 'jdk'
         //env.JAVA_HOME = "${jdkHome}"
         //env.PATH = "${jdkHome}/bin:${env.PATH}"
-        useJdk(jdkHome)
+        if (!'openjdk-17-jdk'.equalsIgnoreCase(jdkHome)) {
+            useJdk(jdkHome)
+        }
 
         stage('Checkout') {
             checkout scm
