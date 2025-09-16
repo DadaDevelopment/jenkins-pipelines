@@ -10,10 +10,8 @@ def call(Map config) {
     node {
         cleanWs()
 
-        if (config.get('jdk') != null && !"openjdk-17-jdk".equalsIgnoreCase(config.get('jdk'))) {
-            def jdkHome = tool name: config.get('jdk'), type: 'jdk'
-            useJdk(jdkHome)
-        }
+        def jdkHome = tool name: config.get('jdk', "openjdk-17-jdk"), type: 'jdk'
+        useJdk(jdkHome)
 
         stage('Checkout') {
             checkout scm
