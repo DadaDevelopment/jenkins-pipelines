@@ -126,7 +126,7 @@ def call(Map config) {
                 } else {
                     values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
                 }
-                def result = makeDockerImageInfo($ { PROJECT_NAME }, 'dada', '1.0.0')
+                def result = makeDockerImageInfo(${PROJECT_NAME}, 'dada', '1.0.0')
                 def image = result.getName() + ':' + result.getTag()
                 sh """
                     docker build -t ${image} .
