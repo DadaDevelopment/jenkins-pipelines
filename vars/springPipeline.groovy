@@ -18,16 +18,13 @@ def call(Map config) {
         }
 
 
-        stage('Build && Test') {
-            mvn("clean install -U -Dmaven.repo.local=/root/.m2/repository/ -ntp")
-        }
-//        stage('archieveArtifacts') {
-//                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
-//        }
+        //stage('Build && Test') {
+        //    mvn("clean install -U -Dmaven.repo.local=/root/.m2/repository/ -ntp")
+        //}
 
         if (!isPR() && env.BRANCH_NAME == 'develop') {
-            stage('SonarQube Analysis') {
-                sonar("clean verify sonar:sonar " +
+            stage('Build && Test && SonarQube Analysis') {
+                sonar("clean install verify sonar:sonar " +
                         "-Dsonar.projectKey=${config.sonarKey} " +
                         "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml " +
                         "-Dsonar.projectName=${PROJECT_NAME}")
