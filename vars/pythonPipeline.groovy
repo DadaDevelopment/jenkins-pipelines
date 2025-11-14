@@ -17,15 +17,13 @@ def call(Map config) {
 
         stage("Install Python $python") {
             sh """
-                if ! command -v $python >/dev/null 2>&1; then
-                    apt-get update
-                    apt-get install -y software-properties-common
-                    add-apt-repository -y ppa:deadsnakes/ppa
-                    apt-get update
-                else
-                    echo "$python already installed"
-                fi
+               
+                apt-get update
+                apt-get install -y software-properties-common
+                add-apt-repository -y ppa:deadsnakes/ppa
+                apt-get update
                 apt-get install -y $python $python-venv $python-dev
+                apt-get install -y build-essential libpq-dev
             """
         }
 
