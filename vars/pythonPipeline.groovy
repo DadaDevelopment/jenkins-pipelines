@@ -66,7 +66,6 @@ def call(Map config) {
                     . venv/bin/activate
                     python -m ensurepip
                     python -m pip install --upgrade pip
-                    python -m pip install pytest pytest-cov pytest-asyncio testcontainers
                     
                     if [ -f requirements.txt ]; then
                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
@@ -106,6 +105,7 @@ def call(Map config) {
                     echo "⚠️  No tests found — skipping pytest"
                 else
                     echo "✓ Tests detected — running pytest"
+                    python -m pip install pytest pytest-cov pytest-asyncio testcontainers
                     python -m pytest
                 fi
             """
