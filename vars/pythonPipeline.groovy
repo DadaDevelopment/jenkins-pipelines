@@ -17,13 +17,43 @@ def call(Map config) {
 
         stage("Install Python $python") {
             sh """
-               
-                apt-get update
-                apt-get install -y software-properties-common
-                add-apt-repository -y ppa:deadsnakes/ppa
-                apt-get update
-                apt-get install -y $python $python-venv $python-dev
-                apt-get install -y build-essential libpq-dev
+                set -eux
+        
+                # Список всех нужных пакетов
+                DEPS="$python $python-venv $python-dev build-essential libpq-dev software-properties-common"
+        
+                MISSING=""
+        
+                # Проверяем, какие пакеты не установлены
+                for pkg in \$DEPS; do
+                    if ! dpkg -s \$pkg >/dev/null 2>&1; then
+                        echo "Package \$pkg is missing"
+                        MISSING="\$MISSING \$pkg"
+                    else
+                        echo "Package \$pkg already installed"
+                    fi
+                done
+        
+                if [ -n "\$MISSING" ]; then
+                    echo "Installing missing packages:\$MISSING"
+        
+                    apt-get update
+        
+                    # PPA нужен только для нестандартных версий Python
+                    add-apt-repository -y ppa:deadsnakes/ppa || true
+                    apt-get update
+        
+                    apt-get install -y \$MISSING
+                else
+                    echo "All required packages already installed"
+                fi
+        
+                # Дополни   тельная проверка, что бинарь действительно есть
+                if ! command -v $python >/dev/null 2>&1; then
+                    echo "ERROR: $python package is installed but binary not found in PATH"
+                    which $python || true
+                    exit 1
+                fi
             """
         }
 
@@ -36,6 +66,7 @@ def call(Map config) {
                     . venv/bin/activate
                     python -m ensurepip
                     python -m pip install --upgrade pip
+                    python -m pip install pytest pytest-cov pytest-asyncio testcontainers
                     
                     if [ -f requirements.txt ]; then
                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
@@ -43,11 +74,7 @@ def call(Map config) {
                         
                         if [ -f requirements-dev.txt ]; then
                             python -m pip install -r requirements-dev.txt
-                            
-                        else
-                            python -m pip install pytest pytest-cov pytest-asyncio testcontainers
                         fi
-                        
                     fi
                     if [ -f pyproject.toml ]; then
                         python -m pip install uv
