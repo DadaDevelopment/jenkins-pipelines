@@ -90,7 +90,7 @@ def call(Map config) {
                 . venv/bin/activate
         
                 # Добавляем проект в PYTHONPATH (до pytest)
-                export PYTHONPATH=\$PWD:\$PYTHONPATH
+                export PYTHONPATH="\$PWD:\${PYTHONPATH:-}"
         
                 echo "export PYTHONPATH=\$PWD:\$PYTHONPATH" >> venv/bin/activate
         
