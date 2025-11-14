@@ -65,7 +65,6 @@ def call(Map config) {
                     $python -m venv venv
                     . venv/bin/activate
                     python -m ensurepip
-                    python -m pip install --upgrade pip
                     
                     if [ -f requirements.txt ]; then
                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
