@@ -22,10 +22,10 @@ def call(Map config) {
                     apt-get install -y software-properties-common
                     add-apt-repository -y ppa:deadsnakes/ppa
                     apt-get update
-                    apt-get install -y $python $python-venv $python-dev
                 else
                     echo "$python already installed"
                 fi
+                apt-get install -y $python $python-venv $python-dev
             """
         }
 
