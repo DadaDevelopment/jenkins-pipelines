@@ -32,25 +32,34 @@ def call(Map config) {
 
         stage('Install deps') {
             withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
-                withCredentials([usernamePassword(credentialsId: 'docker-nexus-admin-psws', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh """
-                        $python -m venv venv
-                        . venv/bin/activate
-                        python -m pip install --upgrade pip
+
+                sh """
+                    $python -m venv venv
+                    . venv/bin/activate
+                    python -m ensurepip
+                    python -m pip install --upgrade pip
+                    
+                    if [ -f requirements.txt ]; then
                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
-                        pip config debug
                         python -m pip install -r requirements.txt
+                        
                         if [ -f requirements-dev.txt ]; then
                             python -m pip install -r requirements-dev.txt
+                            
                         else
                             python -m pip install pytest pytest-cov pytest-asyncio testcontainers
                         fi
-                    """
-                }
+                        
+                    fi
+                    if [ -f pyproject.toml ]; then
+                        python -m pip install uv
+                        uv sync
+                    fi
+                """
             }
         }
 
-        stage('Tests') {
+        stage('Test $ Lint') {
             sh """
                 . venv/bin/activate
                 python -m pytest
@@ -74,6 +83,9 @@ def call(Map config) {
                 }
                 def result = makeDockerImageInfo($ { PROJECT_NAME }, 'dada', '1.0.0')
                 def image = result.getName() + ':' + result.getTag()
+                sh """
+                    docker build -t ${image} .
+                """
                 doDeploy(image)
                 deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
                         values,
