@@ -84,12 +84,32 @@ def call(Map config) {
             }
         }
 
-        stage('Test $ Lint') {
+        stage("Test & Lint") {
             sh """
+                set -eux
                 . venv/bin/activate
-                python -m pytest
+        
+                # Добавляем проект в PYTHONPATH (до pytest)
+                export PYTHONPATH=\$PWD:\$PYTHONPATH
+        
                 echo "export PYTHONPATH=\$PWD:\$PYTHONPATH" >> venv/bin/activate
+        
+                echo "Checking for tests..."
+        
+                # Ищем директории tests/ или test/
+                TEST_DIRS=\$(find . -maxdepth 2 -type d \\( -name "tests" -o -name "test" \\))
+        
+                # Ищем любые тестовые файлы test_*.py или *_test.py
+                TEST_FILES=\$(find . -maxdepth 3 -type f \\( -name "test_*.py" -o -name "*_test.py" \\))
+        
+                if [ -z "\$TEST_DIRS" ] && [ -z "\$TEST_FILES" ]; then
+                    echo "⚠️  No tests found — skipping pytest"
+                else
+                    echo "✓ Tests detected — running pytest"
+                    python -m pytest
+                fi
             """
+
             if (!isPR() && env.BRANCH_NAME == 'develop') {
                 def scannerHome = tool 'SonarScanner'
                 withSonarQubeEnv() {
