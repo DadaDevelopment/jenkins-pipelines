@@ -111,8 +111,28 @@ def call(Map config) {
 
             if (!isPR() && env.BRANCH_NAME == 'develop') {
                 def scannerHome = tool 'SonarScanner'
-                withSonarQubeEnv() {
-                    sh "${scannerHome}/bin/sonar-scanner"
+
+
+                if (!fileExists('sonar-project.properties')) {
+                    echo "⚠️  sonar-project.properties not found — skipping Sonar scan"
+                } else {
+                    def props = readFile('sonar-project.properties')
+                    def missing = []
+
+                    // список обязательных параметров
+                    ['sonar.projectKey', 'sonar.sources'].each { key ->
+                        if (!props.contains("${key}=")) {
+                            missing << key
+                        }
+                    }
+
+                    if (!missing.isEmpty()) {
+                        echo "⚠️  Missing mandatory Sonar properties: ${missing.join(', ')} — skipping Sonar scan"
+                    } else {
+                        withSonarQubeEnv() {
+                            sh "${scannerHome}/bin/sonar-scanner"
+                        }
+                    }
                 }
             }
         }
