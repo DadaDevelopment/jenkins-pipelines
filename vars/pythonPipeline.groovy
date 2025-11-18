@@ -74,7 +74,7 @@ def call(Map config) {
                         fi
                     fi
                     if [ -f pyproject.toml ]; then
-                        python -m pip install uv
+                        curl -LsSf https://astral.sh/uv/install.sh | sh
                         uv sync
                     fi
                 """
