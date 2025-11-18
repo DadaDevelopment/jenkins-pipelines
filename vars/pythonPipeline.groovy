@@ -77,7 +77,7 @@ def call(Map config) {
                     if [ -f pyproject.toml ]; then
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
-                        sed -i '' "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
+                        sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
                         uv sync
                     fi
                 """
