@@ -75,6 +75,7 @@ def call(Map config) {
                     fi
                     if [ -f pyproject.toml ]; then
                         curl -LsSf https://astral.sh/uv/install.sh | sh
+                        export PATH="$HOME/.local/bin:$PATH"
                         uv sync
                     fi
                 """
