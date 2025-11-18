@@ -62,11 +62,10 @@ def call(Map config) {
             withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
 
                 sh """
-                    $python -m venv venv
-                    . venv/bin/activate
-                    python -m ensurepip
-                    
                     if [ -f requirements.txt ]; then
+                        $python -m venv venv
+                        . venv/bin/activate
+                        python -m ensurepip
                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
                         python -m pip install -r requirements.txt
                         
