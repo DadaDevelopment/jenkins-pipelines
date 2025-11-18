@@ -85,12 +85,18 @@ def call(Map config) {
         stage("Test & Lint") {
             sh """
                 set -eux
-                . venv/bin/activate
+                # Активируем виртуальное окружение: сначала .venv от uv, потом старый venv
+                if [ -f ".venv/bin/activate" ]; then
+                    . .venv/bin/activate
+                elif [ -f "venv/bin/activate" ]; then
+                    . venv/bin/activate
+                else
+                    echo "⚠️  No virtualenv (.venv or venv) found — cannot run tests"
+                    exit 1
+                fi
         
                 # Добавляем проект в PYTHONPATH (до pytest)
                 export PYTHONPATH="\$PWD:\${PYTHONPATH:-}"
-        
-                echo "export PYTHONPATH=\$PWD:\$PYTHONPATH" >> venv/bin/activate
         
                 echo "Checking for tests..."
         
