@@ -18,6 +18,7 @@ def call(Map config) {
         stage("Install Python $python") {
             sh """
                 set -eux
+
         
                 # Список всех нужных пакетов
                 DEPS="$python $python-venv $python-dev build-essential libpq-dev software-properties-common"
@@ -76,6 +77,7 @@ def call(Map config) {
                     if [ -f pyproject.toml ]; then
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
+                        sed -i '' "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
                         uv sync
                     fi
                 """
@@ -154,7 +156,7 @@ def call(Map config) {
                 def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
                 def image = result.getName() + ':' + result.getTag()
                 sh """
-                    docker build -t ${image} .
+                    docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -t ${image} .
                 """
                 doDeploy(image)
                 deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
