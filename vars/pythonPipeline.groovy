@@ -83,6 +83,8 @@ def call(Map config) {
             stage('Install deps - uv') {
                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
                     def uvConfigDir = new File(env.UV_SETTINGS).getParent()
+                    echo "Using uv config dir: ${uvConfigDir}"
+                    echo :"Using config file: ${env.UV_SETTINGS} / ${UV_SETTINGS}"
                     sh """
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
