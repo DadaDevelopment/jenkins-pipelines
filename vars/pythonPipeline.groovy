@@ -82,12 +82,11 @@ def call(Map config) {
         if (fileExists("pyproject.toml")) {
             stage('Install deps - uv') {
                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
-                    def uvConfigDir = new File(env.UV_SETTINGS).getParent()
                     sh """
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
-                        export XDG_CONFIG_DIRS=${env.UV_SETTINGS}
+                        export XDG_CONFIG_DIRS=${uvConfigDir}
                         uv sync -v
                     """
                 }
