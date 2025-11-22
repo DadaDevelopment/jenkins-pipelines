@@ -78,7 +78,7 @@ def call(Map config) {
             }else {
                 echo "no requirements.txt - skip"
             }
-            def toml = new File("./pyproject.toml ")
+            def toml = new File("./pyproject.toml")
             if (toml.exists()) {
                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
                     def uvConfigDir = new File(env.UV_SETTINGS).getParent()
