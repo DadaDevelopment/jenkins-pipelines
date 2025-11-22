@@ -59,9 +59,8 @@ def call(Map config) {
         }
 
 
-        stage('Install deps') {
-            def req = new File("requirements.txt")
-            if (req.exists()) {
+        if (fileExists("requirements.txt")) {
+            stage('Install deps - pip') {
                 withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
                     sh """
                     $python -m venv venv
@@ -75,11 +74,13 @@ def call(Map config) {
                     fi
                 """
                 }
-            }else {
-                echo "no requirements.txt - skip"
             }
-            def toml = new File("pyproject.toml")
-            if (toml.exists()) {
+        } else {
+            echo "no requirements.txt - skip"
+        }
+
+        if (fileExists("pyproject.toml")) {
+            stage('Install deps - uv') {
                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
                     def uvConfigDir = new File(env.UV_SETTINGS).getParent()
                     sh """
@@ -90,9 +91,9 @@ def call(Map config) {
                         uv sync -v
                     """
                 }
-            }else {
-                echo "no pyptoject.toml - skip"
             }
+        } else {
+            echo "no pyproject.toml - skip"
         }
 
         stage("Test & Lint") {
