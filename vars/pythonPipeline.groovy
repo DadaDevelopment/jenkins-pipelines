@@ -88,7 +88,7 @@ def call(Map config) {
                         export PATH="$HOME/.local/bin:$PATH"
                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
                         export XDG_CONFIG_DIRS=${uvConfigDir}
-                        uv sync -v
+                        uv sync -v --config-file=${env.UV_SETTINGS}
                     """
                 }
             }
