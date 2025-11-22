@@ -60,27 +60,34 @@ def call(Map config) {
 
 
         stage('Install deps') {
-            withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
-
-                sh """
-                    if [ -f requirements.txt ]; then
-                        $python -m venv venv
-                        . venv/bin/activate
-                        python -m ensurepip
-                        export PIP_CONFIG_FILE='${PIP_SETTINGS}'
-                        python -m pip install -r requirements.txt
-                        
-                        if [ -f requirements-dev.txt ]; then
-                            python -m pip install -r requirements-dev.txt
-                        fi
+            def req = new File("requirements.txt")
+            if (req.exists()) {
+                withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
+                    sh """
+                    $python -m venv venv
+                    . venv/bin/activate
+                    python -m ensurepip
+                    export PIP_CONFIG_FILE='${PIP_SETTINGS}'
+                    python -m pip install -r requirements.txt
+                    
+                    if [ -f requirements-dev.txt ]; then
+                        python -m pip install -r requirements-dev.txt
                     fi
-                    if [ -f pyproject.toml ]; then
+                """
+                }
+            }
+            def toml = new File("pyproject.toml ")
+            if (toml.exists()) {
+                withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
+                    def uvConfigDir = new File(env.UV_SETTINGS).getParent()
+                    sh """
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
-                        uv sync
-                    fi
-                """
+                        export XDG_CONFIG_DIRS=
+                        uv sync -v
+                    """
+                }
             }
         }
 
