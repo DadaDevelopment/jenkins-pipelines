@@ -127,7 +127,7 @@ def call(Map config) {
                     echo "⚠️  No tests found — skipping pytest"
                 else
                     echo "✓ Tests detected — running pytest"
-                    python -m pip install pytest pytest-cov pytest-asyncio testcontainers
+                    ${fileExists("pyproject.toml")?'uv':''} pip install pytest pytest-cov pytest-asyncio testcontainers
                     python -m pytest
                 fi
             """
@@ -188,7 +188,7 @@ def call(Map config) {
                 script {
                     sh """
                         set -x
-                        uv pip install  build
+                        ${fileExists("pyproject.toml")?'uv':''} pip install  build
                         python -m build
                     """
                 }
