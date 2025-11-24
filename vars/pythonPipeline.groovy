@@ -5,6 +5,10 @@ def call(Map config) {
 
     def PROJECT_NAME = config.projectName
     def PYTHON_VER = config.get('python', '3.12')
+    def DEPLOY_MODE = config.get('deploy', 'image')
+    def deploy_build = DEPLOY_MODE == "image"
+    def deploy_package = DEPLOY_MODE == "dist"
+
     def python = 'python' + PYTHON_VER
     node {
         cleanWs()
@@ -156,7 +160,7 @@ def call(Map config) {
             }
         }
 
-        if (!isPR() && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
+        if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
             stage('Docker Deploy && Deploy to ArgoCD') {
                 def values
                 if (env.BRANCH_NAME == 'master') {
@@ -179,5 +183,24 @@ def call(Map config) {
             }
 
         }
+        if (deploy_package) {
+            stage("Build Python") {
+                script {
+                    sh """
+                        set -x
+                        uv pip install  build
+                        python -m build
+                    """
+                }
+            }
+            if (!isPR()) {
+                stage("PythonDeploy") {
+                    sh """
+                        twine upload -r nexus dist/* --config-file .pypirc
+                    """
+                }
+            }
+        }
     }
+
 }
