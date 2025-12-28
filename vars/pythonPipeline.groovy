@@ -92,7 +92,7 @@ def call(Map config) {
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
-                        uv sync -v --config-file=${env.UV_SETTINGS} --all-extras --pyton $PYTHON_VER
+                        uv sync -v --config-file=${env.UV_SETTINGS} --all-extras --python $PYTHON_VER
                         cp -f ${env.UV_SETTINGS} ./uv.toml
                     """
                     }
