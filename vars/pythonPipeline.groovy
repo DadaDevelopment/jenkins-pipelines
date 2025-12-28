@@ -191,7 +191,7 @@ def call(Map config) {
                         sh """
                         set -x
                         ${fileExists("pyproject.toml") ? 'uv' : ''} pip install  build
-                        python -m build
+                        $python -m build
                     """
                     }
                 }
