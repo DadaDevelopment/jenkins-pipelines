@@ -201,6 +201,7 @@ def call(Map config) {
                             exit 1
                         fi
                         python -m build
+                        uv sync -v --config-file=uv.toml --all-extras --python $PYTHON_VER --no-extra dev
                     """
                     }
                 }
