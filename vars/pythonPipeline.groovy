@@ -13,14 +13,16 @@ def call(Map config) {
     node {
         cleanWs()
 
-        stage('Checkout') {
-            checkout scm
-            commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
-            commitMessage = sh(script: "git log -1 --pretty=format:'%s'", returnStdout: true).trim()
-        }
+        withEnv(["PATH=${env.HOME}/.local/bin:${env.PATH}"]) {
 
-        stage("Install Python $python") {
-            sh """
+            stage('Checkout') {
+                checkout scm
+                commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
+                commitMessage = sh(script: "git log -1 --pretty=format:'%s'", returnStdout: true).trim()
+            }
+
+            stage("Install Python $python") {
+                sh """
                 set -eux
 
         
@@ -60,13 +62,13 @@ def call(Map config) {
                     exit 1
                 fi
             """
-        }
+            }
 
 
-        if (fileExists("requirements.txt")) {
-            stage('Install deps - pip') {
-                withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
-                    sh """
+            if (fileExists("requirements.txt")) {
+                stage('Install deps - pip') {
+                    withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
+                        sh """
                     $python -m venv venv
                     . venv/bin/activate
                     python -m ensurepip
@@ -77,30 +79,30 @@ def call(Map config) {
                         python -m pip install -r requirements-dev.txt
                     fi
                 """
+                    }
                 }
+            } else {
+                echo "no requirements.txt - skip"
             }
-        } else {
-            echo "no requirements.txt - skip"
-        }
 
-        if (fileExists("pyproject.toml")) {
-            stage('Install deps - uv') {
-                withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
-                    sh """
+            if (fileExists("pyproject.toml")) {
+                stage('Install deps - uv') {
+                    withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
+                        sh """
                         curl -LsSf https://astral.sh/uv/install.sh | sh
                         export PATH="$HOME/.local/bin:$PATH"
                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml
                         uv sync -v --config-file=${env.UV_SETTINGS}
                         cp -f ${env.UV_SETTINGS} ./uv.toml
                     """
+                    }
                 }
+            } else {
+                echo "no pyproject.toml - skip"
             }
-        } else {
-            echo "no pyproject.toml - skip"
-        }
 
-        stage("Test & Lint") {
-            sh """
+            stage("Test & Lint") {
+                sh """
                 set -eux
                 # Активируем виртуальное окружение: сначала .venv от uv, потом старый venv
                 if [ -f ".venv/bin/activate" ]; then
@@ -127,77 +129,78 @@ def call(Map config) {
                     echo "⚠️  No tests found — skipping pytest"
                 else
                     echo "✓ Tests detected — running pytest"
-                    ${fileExists("pyproject.toml")?'uv':''} pip install pytest pytest-cov pytest-asyncio testcontainers
+                    ${fileExists("pyproject.toml") ? 'uv' : ''} pip install pytest pytest-cov pytest-asyncio testcontainers
                     python -m pytest
                 fi
             """
 
-            if (!isPR() && env.BRANCH_NAME == 'develop') {
-                def scannerHome = tool 'SonarScanner'
+                if (!isPR() && env.BRANCH_NAME == 'develop') {
+                    def scannerHome = tool 'SonarScanner'
 
 
-                if (!fileExists('sonar-project.properties')) {
-                    echo "⚠️  sonar-project.properties not found — skipping Sonar scan"
-                } else {
-                    def props = readFile('sonar-project.properties')
-                    def missing = []
-
-                    // список обязательных параметров
-                    ['sonar.projectKey', 'sonar.sources'].each { key ->
-                        if (!props.contains("${key}=")) {
-                            missing << key
-                        }
-                    }
-
-                    if (!missing.isEmpty()) {
-                        echo "⚠️  Missing mandatory Sonar properties: ${missing.join(', ')} — skipping Sonar scan"
+                    if (!fileExists('sonar-project.properties')) {
+                        echo "⚠️  sonar-project.properties not found — skipping Sonar scan"
                     } else {
-                        withSonarQubeEnv() {
-                            sh "${scannerHome}/bin/sonar-scanner"
+                        def props = readFile('sonar-project.properties')
+                        def missing = []
+
+                        // список обязательных параметров
+                        ['sonar.projectKey', 'sonar.sources'].each { key ->
+                            if (!props.contains("${key}=")) {
+                                missing << key
+                            }
+                        }
+
+                        if (!missing.isEmpty()) {
+                            echo "⚠️  Missing mandatory Sonar properties: ${missing.join(', ')} — skipping Sonar scan"
+                        } else {
+                            withSonarQubeEnv() {
+                                sh "${scannerHome}/bin/sonar-scanner"
+                            }
                         }
                     }
                 }
             }
-        }
 
-        if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
-            stage('Docker Deploy && Deploy to ArgoCD') {
-                def values
-                if (env.BRANCH_NAME == 'master') {
-                    values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
-                } else {
-                    values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
-                }
-                def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
-                def image = result.getName() + ':' + result.getTag()
-                sh """
+            if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
+                stage('Docker Deploy && Deploy to ArgoCD') {
+                    def values
+                    if (env.BRANCH_NAME == 'master') {
+                        values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                    } else {
+                        values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                    }
+                    def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
+                    def image = result.getName() + ':' + result.getTag()
+                    sh """
                     docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -t ${image} .
                 """
-                doDeploy(image)
-                deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
-                        values,
-                        result.getTag(),
-                        commitAuthor,
-                        commitMessage,
-                        'develop')
-            }
+                    doDeploy(image)
+                    deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
+                            values,
+                            result.getTag(),
+                            commitAuthor,
+                            commitMessage,
+                            'develop')
+                }
 
-        }
-        if (deploy_package) {
-            stage("Build Python") {
-                script {
-                    sh """
+            }
+            if (deploy_package) {
+                stage("Build Python") {
+                    script {
+                        sh """
                         set -x
-                        ${fileExists("pyproject.toml")?'uv':''} pip install  build
+                        ${fileExists("pyproject.toml") ? 'uv' : ''} pip install  build
                         python -m build
                     """
+                    }
                 }
-            }
-            if (!isPR()) {
-                stage("PythonDeploy") {
-                    sh """
+                if (!isPR()) {
+                    stage("PythonDeploy") {
+                        sh """
                         twine upload -r nexus dist/* --config-file .pypirc
                     """
+                    }
                 }
             }
         }
