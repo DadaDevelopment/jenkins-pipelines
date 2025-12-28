@@ -130,6 +130,7 @@ def call(Map config) {
                 else
                     echo "✓ Tests detected — running pytest"
                     ${fileExists("pyproject.toml") ? 'uv' : ''} pip install pytest pytest-cov pytest-asyncio testcontainers
+                    ${fileExists("pyproject.toml")? 'uv sync --all-extras':""}
                     python -m pytest
                 fi
             """
