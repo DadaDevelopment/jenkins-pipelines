@@ -191,7 +191,16 @@ def call(Map config) {
                         sh """
                         set -x
                         ${fileExists("pyproject.toml") ? 'uv' : ''} pip install  build
-                        $python -m build
+                         # Активируем виртуальное окружение: сначала .venv от uv, потом старый venv
+                        if [ -f ".venv/bin/activate" ]; then
+                            . .venv/bin/activate
+                        elif [ -f "venv/bin/activate" ]; then
+                            . venv/bin/activate
+                        else
+                            echo "⚠️  No virtualenv (.venv or venv) found — cannot build"
+                            exit 1
+                        fi
+                        python -m build
                     """
                     }
                 }
