@@ -170,10 +170,17 @@ def call(Map config) {
                     } else {
                         values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
                     }
+                    def dockerfile = config.get('dockerfile', 'Dockerfile')
+                    if (!fileExists(dockerfile)) {
+                        writeFile file: dockerfile, text: libraryResource('templates/Dockerfile.python')
+                    }
+                    if (!fileExists('.dockerignore')) {
+                        writeFile file: '.dockerignore', text: libraryResource('templates/.dockerignore')
+                    }
                     def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
                     def image = result.getName() + ':' + result.getTag()
                     sh """
-                    docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -t ${image} .
+                    docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
                 """
                     doDeploy(image)
                     deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
