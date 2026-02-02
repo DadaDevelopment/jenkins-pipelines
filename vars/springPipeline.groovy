@@ -7,6 +7,7 @@ def call(Map config) {
 
     def PROJECT_NAME = config.projectName
     def SUBMODULE = config.get('submodule', '')
+    def buildPath = SUBMODULE ? "-pl ${SUBMODULE}" : ""
     node {
         cleanWs()
         useJdk(config.get('jdk', 'openjdk-17-jdk'))
@@ -18,16 +19,16 @@ def call(Map config) {
         }
 
 
-        //stage('Build && Test') {
-        //    mvn("clean install -U -Dmaven.repo.local=/root/.m2/repository/ -ntp")
-        //}
-
         if (!isPR() && env.BRANCH_NAME == 'develop') {
             stage('Build && Test && SonarQube Analysis') {
                 sonar("clean install verify sonar:sonar " +
                         "-Dsonar.projectKey=${config.sonarKey} " +
                         "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml " +
                         "-Dsonar.projectName=${PROJECT_NAME}")
+            }
+        }else{
+            stage('Build && Test') {
+                mvn("clean install -Dmaven.repo.local=/root/.m2/repository/ -ntp -U ${buildPath}")
             }
         }
 
@@ -39,7 +40,7 @@ def call(Map config) {
                 } else {
                     values = "helm/spring/services/${PROJECT_NAME}/values-dev.yaml"
                 }
-                def buildPath = SUBMODULE ? "-pl ${SUBMODULE}" : ""
+
                 def result = deployDockerImageToNexus("${PROJECT_NAME}-service",
                         'dada',
                         "-Dmaven.repo.local=/root/.m2/repository/ -ntp -U ${buildPath}")
