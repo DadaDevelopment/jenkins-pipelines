@@ -21,7 +21,7 @@ def call(Map config) {
 
         if (!isPR() && env.BRANCH_NAME == 'develop') {
             stage('Build && Test && SonarQube Analysis') {
-                sonar("clean install verify sonar:sonar " +
+                sonar("clean install verify sonar:sonar -Dmaven.repo.local=/root/.m2/repository/" +
                         "-Dsonar.projectKey=${config.sonarKey} " +
                         "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml " +
                         "-Dsonar.projectName=${PROJECT_NAME}")
