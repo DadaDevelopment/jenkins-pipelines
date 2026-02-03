@@ -7,7 +7,7 @@ def call(Map config) {
 
     def PROJECT_NAME = config.projectName
     def SUBMODULE = config.get('submodule', '')
-    def buildPath = SUBMODULE ? " -pl ${SUBMODULE} -am " : ""
+
     node {
         cleanWs()
         useJdk(config.get('jdk', 'openjdk-17-jdk'))
@@ -33,6 +33,7 @@ def call(Map config) {
         }
 
         if (!isPR() && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
+            def buildPath = SUBMODULE ? " -pl ${SUBMODULE}" : ""
             stage('Docker Deploy && Deploy to ArgoCD') {
                 def values
                 if(env.BRANCH_NAME == 'master') {
