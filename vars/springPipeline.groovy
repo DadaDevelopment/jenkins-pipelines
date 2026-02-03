@@ -28,7 +28,7 @@ def call(Map config) {
             }
         }else{
             stage('Build && Test') {
-                mvn("clean install -Dmaven.repo.local=/root/.m2/repository/ -ntp -U ${buildPath}")
+                mvn("clean install -Dmaven.repo.local=/root/.m2/repository/ -ntp -U")
             }
         }
 
