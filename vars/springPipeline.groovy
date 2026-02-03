@@ -7,7 +7,7 @@ def call(Map config) {
 
     def PROJECT_NAME = config.projectName
     def SUBMODULE = config.get('submodule', '')
-    def buildPath = SUBMODULE ? "-pl ${SUBMODULE}  -am" : ""
+    def buildPath = SUBMODULE ? " -pl ${SUBMODULE} -am " : ""
     node {
         cleanWs()
         useJdk(config.get('jdk', 'openjdk-17-jdk'))
