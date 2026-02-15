@@ -134,7 +134,7 @@ def call(Map config) {
                 fi
             """
                 if (fileExists('test-results.xml')) {
-                    junit 'test-results.xml'
+                    junit testResults: 'test-results.xml', skipPublishingChecks: true
                 }
 
                 if (!isPR() && env.BRANCH_NAME == 'develop') {
