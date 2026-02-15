@@ -130,9 +130,11 @@ def call(Map config) {
                 else
                     echo "✓ Tests detected — running pytest"
                     ${fileExists("pyproject.toml") ? 'uv' : ''} pip install pytest pytest-cov pytest-asyncio testcontainers
-                    python -m pytest
-                fi
+                    python -m pytest --junitxml test-results.xml
             """
+                if (fileExists('sonar-project.properties')) {
+                    junit 'test-results.xml'
+                }
 
                 if (!isPR() && env.BRANCH_NAME == 'develop') {
                     def scannerHome = tool 'SonarScanner'
