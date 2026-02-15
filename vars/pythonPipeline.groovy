@@ -131,8 +131,9 @@ def call(Map config) {
                     echo "✓ Tests detected — running pytest"
                     ${fileExists("pyproject.toml") ? 'uv' : ''} pip install pytest pytest-cov pytest-asyncio testcontainers
                     python -m pytest --junitxml test-results.xml
+                fi
             """
-                if (fileExists('sonar-project.properties')) {
+                if (fileExists('test-results.xml')) {
                     junit 'test-results.xml'
                 }
 
