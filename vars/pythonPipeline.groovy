@@ -169,7 +169,7 @@ def call(Map config) {
             if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
                 stage('Docker Deploy && Deploy to ArgoCD') {
                     def values
-                    if (env.SPLIT_DEV_AND_PROD) {
+                    if (SPLIT_DEV_AND_PROD) {
                         values = "helm/python/services/${PROJECT_NAME}/values.yaml"
                     } else {
                         if (env.BRANCH_NAME == 'master') {
