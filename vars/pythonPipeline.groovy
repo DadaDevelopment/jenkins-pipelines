@@ -5,6 +5,7 @@ def call(Map config) {
 
     def PROJECT_NAME = config.projectName
     def PYTHON_VER = config.get('python', '3.12')
+    def SPLIT_DEV_AND_PROD = config.get('env-values', false)
     def DEPLOY_MODE = config.get('deploy', 'image')
     def deploy_build = DEPLOY_MODE == "image"
     def deploy_package = DEPLOY_MODE == "dist"
@@ -168,10 +169,14 @@ def call(Map config) {
             if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
                 stage('Docker Deploy && Deploy to ArgoCD') {
                     def values
-                    if (env.BRANCH_NAME == 'master') {
-                        values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                    if (env.SPLIT_DEV_AND_PROD) {
+                        values = "helm/python/services/${PROJECT_NAME}/values.yaml"
                     } else {
-                        values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                        if (env.BRANCH_NAME == 'master') {
+                            values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                        } else {
+                            values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                        }
                     }
                     def dockerfile = config.get('dockerfile', 'Dockerfile')
                     if (!fileExists(dockerfile)) {
