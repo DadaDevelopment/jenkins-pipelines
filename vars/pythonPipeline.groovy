@@ -19,10 +19,17 @@ def call(Map config) {
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
 
     def REGISTRY_CREDENTIALS_ID = ((config.get('registryCredentialsId', '') ?: '') as String).trim()
-    def BUILDER_IMAGE = ((config.get('builderImage', "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim") ?: '') as String).trim()
-    def BUILDAH_IMAGE = ((config.get('buildahImage', 'quay.io/buildah/stable:v1') ?: '') as String).trim()
+    def BUILDER_IMAGE = ((config.get('builderImage',
+            "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim") ?: '') as String).trim()
+    def DOCKER_CLI_IMAGE = ((config.get('dockerCliImage', 'docker:29-cli') ?: '') as String).trim()
 
-    def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}".replaceAll('[^A-Za-z0-9-]', '-')
+    def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
+            .replaceAll('[^A-Za-z0-9-]', '-')
+            .toLowerCase()
+
+    def buildxName = "bx-${env.JOB_NAME ?: 'job'}-${env.BUILD_NUMBER ?: '0'}"
+            .replaceAll('[^A-Za-z0-9-]', '-')
+            .toLowerCase()
 
     podTemplate(
             cloud: 'self-managed',
@@ -47,15 +54,13 @@ spec:
       emptyDir: {}
     - name: uv-cache
       emptyDir: {}
-    - name: containers-storage
-      emptyDir: {}
-    - name: buildah-tmp
+    - name: docker-config
       emptyDir: {}
   containers:
     - name: jnlp
       image: jenkins/inbound-agent:latest
-      workingDir: /home/jenkins/agent
       tty: true
+      workingDir: /home/jenkins/agent
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -67,45 +72,38 @@ spec:
       workingDir: /home/jenkins/agent
       env:
         - name: HOME
-          value: /home/jenkins
+          value: /tmp
         - name: PIP_CACHE_DIR
-          value: /home/jenkins/.cache/pip
+          value: /tmp/.cache/pip
         - name: UV_CACHE_DIR
-          value: /home/jenkins/.cache/uv
+          value: /tmp/.cache/uv
         - name: XDG_CACHE_HOME
-          value: /home/jenkins/.cache
+          value: /tmp/.cache
         - name: PATH
           value: /home/jenkins/.local/bin:/usr/local/bin:/usr/bin:/bin
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
         - name: pip-cache
-          mountPath: /home/jenkins/.cache/pip
+          mountPath: /tmp/.cache/pip
         - name: uv-cache
-          mountPath: /home/jenkins/.cache/uv
+          mountPath: /tmp/.cache/uv
 
-    - name: image-builder
-      image: ${BUILDAH_IMAGE}
-      command: ['cat']
+    - name: docker
+      image: ${DOCKER_CLI_IMAGE}
+      command: ['sh', '-c', 'cat']
       tty: true
       workingDir: /home/jenkins/agent
       env:
         - name: HOME
-          value: /root
-        - name: STORAGE_DRIVER
-          value: vfs
-        - name: BUILDAH_FORMAT
-          value: docker
-      securityContext:
-        runAsUser: 0
-        runAsGroup: 0
+          value: /tmp
+        - name: DOCKER_CONFIG
+          value: /tmp/.docker
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
-        - name: containers-storage
-          mountPath: /var/lib/containers
-        - name: buildah-tmp
-          mountPath: /var/tmp
+        - name: docker-config
+          mountPath: /tmp/.docker
 """
     ) {
         node(podLabel) {
@@ -132,7 +130,7 @@ spec:
                     runStage("Toolchain") {
                         sh """
                             set -eux
-                            whoami
+                            id
                             hostname
                             python --version
                             uv --version
@@ -273,8 +271,8 @@ spec:
                 }
 
                 if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
-                    container('image-builder') {
-                        runStage('Image Build & Push + Deploy to ArgoCD') {
+                    container('docker') {
+                        runStage('Image Buildx Build & Push + Deploy to ArgoCD') {
                             def values
                             if (!SPLIT_DEV_AND_PROD) {
                                 values = "helm/python/services/${PROJECT_NAME}/values.yaml"
@@ -305,28 +303,34 @@ spec:
                                     sh """
                                         set +x
                                         REGISTRY_HOST=\$(echo '${imageRepo}' | cut -d/ -f1)
-                                        buildah login --username "\$REGISTRY_USER" --password "\$REGISTRY_PASSWORD" "\$REGISTRY_HOST"
+                                        echo "\$REGISTRY_PASSWORD" | docker login "\$REGISTRY_HOST" -u "\$REGISTRY_USER" --password-stdin
                                     """
                                 }
                             }
 
                             sh """
                                 set -eux
-                                buildah version
-                                buildah bud \
-                                  --storage-driver=vfs \
-                                  --isolation=chroot \
-                                  --layers \
-                                  --format docker \
+                                docker buildx version
+
+                                docker buildx create \
+                                  --name ${buildxName} \
+                                  --driver kubernetes \
+                                  --driver-opt namespace=devops-tools,rootless=true \
+                                  --bootstrap \
+                                  --use
+
+                                docker buildx inspect --bootstrap
+
+                                docker buildx build \
+                                  --builder ${buildxName} \
+                                  --platform linux/amd64 \
                                   --build-arg PYTHON_VERSION=${PYTHON_VER} \
                                   -f ${dockerfile} \
                                   -t ${image} \
+                                  --push \
                                   .
 
-                                buildah push \
-                                  --storage-driver=vfs \
-                                  ${image} \
-                                  docker://${image}
+                                docker buildx rm ${buildxName} || true
                             """
 
                             deployToArgo(
@@ -359,6 +363,10 @@ spec:
                         commitSha: _safeGitValue("git rev-parse HEAD"),
                 )
                 throw err
+            } finally {
+                container('docker') {
+                    sh "docker buildx rm ${buildxName} || true"
+                }
             }
         }
     }
