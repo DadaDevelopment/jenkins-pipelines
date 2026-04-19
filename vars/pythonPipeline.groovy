@@ -327,7 +327,7 @@ spec:
                                 sh """
                                     set -eux
                                     docker version
-                                    docker build -e UV_LINK_MODE=copy--build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
+                                    docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
                                 """
 
                                 withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')]) {
