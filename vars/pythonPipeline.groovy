@@ -56,6 +56,8 @@ spec:
       emptyDir: {}
     - name: docker-certs
       emptyDir: {}
+    - name: tools-volume
+      emptyDir: {}
   containers:
     - name: jnlp
       image: jenkins/inbound-agent:latest
@@ -64,6 +66,8 @@ spec:
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
+        - name: tools-volume
+          mountPath: /tools
 
     - name: builder
       image: ${BUILDER_IMAGE}
@@ -88,6 +92,8 @@ spec:
           mountPath: /tmp/.cache/pip
         - name: uv-cache
           mountPath: /tmp/.cache/uv
+        - name: tools-volume
+          mountPath: /tools
 
     - name: docker
       image: ${DOCKER_CLI_IMAGE}
@@ -104,6 +110,8 @@ spec:
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
+        - name: tools-volume
+          mountPath: /tools
 
     - name: dind
       image: ${DOCKER_DIND_IMAGE}
@@ -147,12 +155,20 @@ spec:
                         runStage("Toolchain") {
                             sh '''
                                 set -eux
+                                python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
+                                /tools/yq --version
+                              '''
+                            withEnv(["PATH=/tools:${env.PATH}"]) {
+                                sh '''
+                                set -eux
                                 mkdir -p "$WORKSPACE/.bin"
                                 id
                                 hostname
                                 python --version
                                 uv --version
+                                yq --version
                             '''
+                            }
                         }
 
                         if (usePip) {
@@ -183,7 +199,7 @@ spec:
                                     sh """
                                         set -eux
                                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml || true
-                                        uv sync -v --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
+                                        uv sync --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
                                         cp -f '${UV_SETTINGS}' ./uv.toml
                                     """
                                 }
@@ -265,7 +281,7 @@ spec:
                                         fi
                                         python -m build
                                         if [ -f uv.toml ]; then
-                                            uv sync -v --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
+                                            uv sync --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
                                         fi
                                     """
                                 }
@@ -314,7 +330,7 @@ spec:
                                     docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
                                 """
 
-                                withEnv(["PATH=${env.WORKSPACE}/.bin:${env.PATH}"]) {
+                                withEnv(["PATH=/tools:${env.PATH}"]) {
                                     doDeploy(image)
                                 }
 
