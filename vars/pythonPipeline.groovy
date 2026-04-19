@@ -33,6 +33,9 @@ def call(Map config) {
                     checkout scm
                     commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
                     commitMessage = sh(script: "git log -1 --pretty=format:'%s'", returnStdout: true).trim()
+                    sh(script: "whoami", returnStdout: true)
+                    sh(script: "hostname", returnStdout: true)
+
                 }
 
                 runStage("Install Python $python") {
