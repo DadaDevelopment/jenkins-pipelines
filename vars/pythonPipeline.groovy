@@ -327,19 +327,29 @@ spec:
                                 sh """
                                     set -eux
                                     docker version
-                                    docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
+                                    docker build -e UV_LINK_MODE=copy--build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
                                 """
 
-                                withEnv(["PATH=/tools:${env.PATH}"]) {
-                                    doDeploy(image)
+                                withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')]) {
+                                    sh '''
+                                        set -eux
+                                        mkdir -p /tmp/.ssh
+                                        chmod 700 /tmp/.ssh
+                                        ssh-keyscan -p 7999 -H bitbucket.dada-tuda.ru > /tmp/.ssh/known_hosts
+                                        chmod 644 /tmp/.ssh/known_hosts
+                                    '''
 
+                                    def gitSshCmd = "ssh -i ${SSH_KEY} -p 7999 -o IdentitiesOnly=yes -o UserKnownHostsFile=/tmp/.ssh/known_hosts -o StrictHostKeyChecking=yes"
 
-                                    deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
-                                            values,
-                                            result.getTag(),
-                                            commitAuthor,
-                                            commitMessage,
-                                            'develop')
+                                    withEnv(["PATH=/tools:${env.PATH}", "GIT_SSH_COMMAND=${gitSshCmd}"]) {
+                                        doDeploy(image)
+                                        deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
+                                                values,
+                                                result.getTag(),
+                                                commitAuthor,
+                                                commitMessage,
+                                                'develop')
+                                    }
                                 }
                             }
                         }
