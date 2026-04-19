@@ -7,9 +7,15 @@ def call(Map config) {
     def commitMessage
     def currentStageName = "bootstrap"
 
-    def PROJECT_NAME = config.projectName
+    def PROJECT_NAME = ((config.projectName ?: '') as String).trim()
+    if (!PROJECT_NAME) {
+        error("config.projectName is required")
+    }
+
     def NODE_VER = (config.get('node', '20.19.5') as String).trim()
     def YARN_VER = (config.get('yarn', '4.11.0') as String).trim()
+    def PNPM_VER = (config.get('pnpm', '10.12.4') as String).trim()
+
     def SPLIT_DEV_AND_PROD = config.get('env-values', false)
     def DEPLOY_MODE = config.get('deploy', 'image')
     def deploy_build = DEPLOY_MODE == "image"
@@ -18,12 +24,15 @@ def call(Map config) {
     def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', '') ?: '') as String).trim()
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
 
-    def BUILDER_IMAGE = config.get('builderImage', "node:20-bookworm")
+    def BUILDER_IMAGE = ((config.get('builderImage', 'node:20-bookworm') ?: 'node:20-bookworm') as String).trim()
     def DOCKER_CLI_IMAGE = "docker:29-cli"
     def DOCKER_DIND_IMAGE = "docker:29-dind"
 
     def OPENAPI_BASE_URL = ((config.get('openapiBaseUrl', 'https://profi-backend.dada-tuda.ru') ?: '') as String).trim()
     def OPENAPI_SYNC_SOURCE = ((config.get('openapiSyncSource', 'prod') ?: '') as String).trim()
+    def VALUES_PATH_OVERRIDE = ((config.get('valuesPath', '') ?: '') as String).trim()
+    def DOCKERFILE_OVERRIDE = ((config.get('dockerfile', 'Dockerfile') ?: 'Dockerfile') as String).trim()
+    def DOCKER_CONTEXT = ((config.get('dockerContext', '.') ?: '.') as String).trim()
 
     def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
             .replaceAll('[^A-Za-z0-9-]', '-')
@@ -51,8 +60,6 @@ spec:
     fsGroup: 1000
   volumes:
     - name: workspace-volume
-      emptyDir: {}
-    - name: node-cache
       emptyDir: {}
     - name: npm-cache
       emptyDir: {}
@@ -200,7 +207,7 @@ spec:
                               fi
                             elif [ -f pnpm-lock.yaml ]; then
                               echo "Detected pnpm"
-                              corepack prepare pnpm@latest --activate
+                              corepack prepare pnpm@${PNPM_VER} --activate
                               pnpm --version
                               pnpm install --frozen-lockfile || pnpm install
                             elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
@@ -217,131 +224,133 @@ spec:
                     }
 
                     runStage('Sync OpenAPI') {
-                        sh '''
-                            set -eux
+                        withEnv([
+                                "VITE_API_BASE=${OPENAPI_BASE_URL}",
+                                "OPENAPI_SYNC_SOURCE=${OPENAPI_SYNC_SOURCE}"
+                        ]) {
+                            sh '''
+                                set -eux
 
-                            if [ ! -f package.json ]; then
-                              echo "No package.json — skip OpenAPI sync"
-                              exit 0
-                            fi
+                                if [ ! -f package.json ]; then
+                                  echo "No package.json — skip OpenAPI sync"
+                                  exit 0
+                                fi
 
-                            export VITE_API_BASE="${OPENAPI_BASE_URL}"
-                            export OPENAPI_SYNC_SOURCE="${OPENAPI_SYNC_SOURCE}"
+                                has_script() {
+                                  node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['$1'] ? 0 : 1)"
+                                }
 
-                            has_script() {
-                              node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['$1'] ? 0 : 1)"
-                            }
+                                if [ -f ./scripts/sync-openapi.mjs ]; then
+                                  echo "[sync-openapi] VITE_API_BASE=${VITE_API_BASE}"
+                                  echo "[sync-openapi] OPENAPI_SYNC_SOURCE=${OPENAPI_SYNC_SOURCE}"
+                                  node ./scripts/sync-openapi.mjs
+                                elif has_script sync-openapi; then
+                                  echo "Running package script: sync-openapi"
+                                  if [ -f yarn.lock ]; then
+                                    yarn run sync-openapi
+                                  elif [ -f pnpm-lock.yaml ]; then
+                                    pnpm run sync-openapi
+                                  else
+                                    npm run sync-openapi
+                                  fi
+                                else
+                                  echo "No OpenAPI sync script/file found — skip"
+                                fi
 
-                            if [ -f ./scripts/sync-openapi.mjs ]; then
-                              echo "[sync-openapi] VITE_API_BASE=\${OPENAPI_BASE_URL}"
-                              node ./scripts/sync-openapi.mjs
-                            elif has_script sync-openapi; then
-                              echo "Running package script: sync-openapi"
-                              if [ -f yarn.lock ]; then
-                                yarn run sync-openapi
-                              elif [ -f pnpm-lock.yaml ]; then
-                                pnpm run sync-openapi
-                              else
-                                npm run sync-openapi
-                              fi
-                            else
-                              echo "No OpenAPI sync script/file found — skip"
-                            fi
-
-                            if has_script api:generate; then
-                              echo "Running package script: api:generate"
-                              if [ -f yarn.lock ]; then
-                                yarn api:generate
-                              elif [ -f pnpm-lock.yaml ]; then
-                                pnpm run api:generate
-                              else
-                                npm run api:generate
-                              fi
-                            else
-                              echo "No api:generate script — skip"
-                            fi
-                       '''
+                                if has_script api:generate; then
+                                  echo "Running package script: api:generate"
+                                  if [ -f yarn.lock ]; then
+                                    yarn api:generate
+                                  elif [ -f pnpm-lock.yaml ]; then
+                                    pnpm run api:generate
+                                  else
+                                    npm run api:generate
+                                  fi
+                                else
+                                  echo "No api:generate script — skip"
+                                fi
+                           '''
+                        }
                     }
 
                     runStage('Typecheck / Lint / Build / Tests') {
-                        sh '''
-                            set -eux
+                        withEnv(["VITE_API_BASE=${OPENAPI_BASE_URL}"]) {
+                            sh '''
+                                set -eux
 
-                            has_script() {
-                              node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['$1'] ? 0 : 1)"
-                            }
+                                has_script() {
+                                  node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['$1'] ? 0 : 1)"
+                                }
 
-                            run_pm() {
-                              script_name="\$1"
-                              if [ -f yarn.lock ]; then
-                                yarn run "\$script_name"
-                              elif [ -f pnpm-lock.yaml ]; then
-                                pnpm run "\$script_name"
-                              else
-                                npm run "\$script_name"
-                              fi
-                            }
+                                run_pm() {
+                                  script_name="$1"
+                                  if [ -f yarn.lock ]; then
+                                    yarn run "$script_name"
+                                  elif [ -f pnpm-lock.yaml ]; then
+                                    pnpm run "$script_name"
+                                  else
+                                    npm run "$script_name"
+                                  fi
+                                }
 
-                            if has_script typecheck; then
-                              echo "Running typecheck"
-                              run_pm typecheck
-                            else
-                              echo "No typecheck script — skip"
-                            fi
+                                if has_script typecheck; then
+                                  echo "Running typecheck"
+                                  run_pm typecheck
+                                else
+                                  echo "No typecheck script — skip"
+                                fi
 
-                            if has_script lint; then
-                              echo "Running lint"
-                              run_pm lint
-                            else
-                              echo "No lint script — skip"
-                            fi
+                                if has_script lint; then
+                                  echo "Running lint"
+                                  run_pm lint
+                                else
+                                  echo "No lint script — skip"
+                                fi
 
-                            if has_script build; then
-                              echo "Running build"
-                              run_pm build
-                            else
-                              echo "No build script — skip"
-                            fi
+                                if has_script build; then
+                                  echo "Running build"
+                                  run_pm build
+                                else
+                                  echo "No build script — skip"
+                                fi
 
-                            export VITE_API_BASE="${OPENAPI_BASE_URL}"
-                            echo "[tests] VITE_API_BASE=${OPENAPI_BASE_URL}"
+                                echo "[tests] VITE_API_BASE=${VITE_API_BASE}"
 
-                            real_failed=0
-                            unit_failed=0
-                            real_ran=0
-                            unit_ran=0
+                                real_failed=0
+                                unit_failed=0
+                                real_ran=0
 
-                            if [ -f tests/integration/uiApiCrud.real.test.ts ]; then
-                              real_ran=1
-                              REAL_API_TESTS=1 npx vitest run tests/integration/uiApiCrud.real.test.ts || real_failed=1
-                            fi
+                                if [ -f tests/integration/uiApiCrud.real.test.ts ]; then
+                                  real_ran=1
+                                  REAL_API_TESTS=1 npx vitest run tests/integration/uiApiCrud.real.test.ts || real_failed=1
+                                fi
 
-                            if [ -f tests/integration/generatedApiCrud.real.test.ts ]; then
-                              real_ran=1
-                              REAL_API_TESTS=1 npx vitest run tests/integration/generatedApiCrud.real.test.ts || real_failed=1
-                            fi
+                                if [ -f tests/integration/generatedApiCrud.real.test.ts ]; then
+                                  real_ran=1
+                                  REAL_API_TESTS=1 npx vitest run tests/integration/generatedApiCrud.real.test.ts || real_failed=1
+                                fi
 
-                            if [ -f tests/integration/generatedApiCoverage.real.test.ts ]; then
-                              real_ran=1
-                              REAL_API_TESTS=1 npx vitest run tests/integration/generatedApiCoverage.real.test.ts || real_failed=1
-                            fi
+                                if [ -f tests/integration/generatedApiCoverage.real.test.ts ]; then
+                                  real_ran=1
+                                  REAL_API_TESTS=1 npx vitest run tests/integration/generatedApiCoverage.real.test.ts || real_failed=1
+                                fi
 
-                            if has_script test; then
-                              unit_ran=1
-                              REAL_API_TESTS=0 run_pm test || unit_failed=1
-                            else
-                              echo "No test script — skip unit tests"
-                            fi
+                                if has_script test; then
+                                  REAL_API_TESTS=0 run_pm test || unit_failed=1
+                                else
+                                  echo "No test script — skip unit tests"
+                                fi
 
-                            if [ "\$real_ran" = "0" ]; then
-                              echo "No real integration tests found — skip"
-                            fi
+                                if [ "$real_ran" = "0" ]; then
+                                  echo "No real integration tests found — skip"
+                                fi
 
-                            if [ "\$real_failed" = "1" ] || [ "\$unit_failed" = "1" ]; then
-                              echo "Some JS tests failed"
-                              exit 1
-                            fi
-                        '''
+                                if [ "$real_failed" = "1" ] || [ "$unit_failed" = "1" ]; then
+                                  echo "Some JS tests failed"
+                                  exit 1
+                                fi
+                            '''
+                        }
                     }
 
                     runStage('Sonar (optional)') {
@@ -378,7 +387,9 @@ spec:
                     container('docker') {
                         runStage('Docker Deploy && Deploy to ArgoCD') {
                             def values
-                            if (!SPLIT_DEV_AND_PROD) {
+                            if (VALUES_PATH_OVERRIDE) {
+                                values = VALUES_PATH_OVERRIDE
+                            } else if (!SPLIT_DEV_AND_PROD) {
                                 values = "helm/javascript/services/${PROJECT_NAME}/values.yaml"
                             } else {
                                 if (env.BRANCH_NAME == 'master') {
@@ -388,7 +399,7 @@ spec:
                                 }
                             }
 
-                            def dockerfile = config.get('dockerfile', 'Dockerfile')
+                            def dockerfile = DOCKERFILE_OVERRIDE
                             if (!fileExists(dockerfile)) {
                                 writeFile file: dockerfile, text: libraryResource('templates/Dockerfile.javascript')
                             }
@@ -402,7 +413,7 @@ spec:
                             sh """
                                 set -eux
                                 docker version
-                                docker build -f ${dockerfile} -t ${image} .
+                                docker build -f ${dockerfile} -t ${image} ${DOCKER_CONTEXT}
                             """
 
                             withCredentials([
@@ -467,5 +478,3 @@ spec:
         }
     }
 }
-
-
