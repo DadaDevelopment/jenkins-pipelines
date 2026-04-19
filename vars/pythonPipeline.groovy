@@ -47,13 +47,17 @@ spec:
     fsGroup: 1000
   volumes:
     - name: workspace-volume
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 5Gi
     - name: pip-cache
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 2Gi
     - name: uv-cache
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 2Gi
     - name: docker-graph-storage
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 10Gi
     - name: docker-certs
       emptyDir: {}
     - name: tools-volume
@@ -85,6 +89,13 @@ spec:
           value: /tmp/.cache
         - name: PATH
           value: /home/jenkins/.local/bin:/usr/local/bin:/usr/bin:/bin
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "2Gi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -107,6 +118,13 @@ spec:
           value: tcp://localhost:2375
         - name: DOCKER_TLS_CERTDIR
           value: ""
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "256Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -123,11 +141,20 @@ spec:
       args:
         - --host=tcp://0.0.0.0:2375
         - --host=unix:///var/run/docker.sock
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "2Gi"
       volumeMounts:
         - name: docker-graph-storage
           mountPath: /var/lib/docker
         - name: docker-certs
           mountPath: /certs
+        - name: workspace-volume
+          mountPath: /home/jenkins/agent
 """
     ) {
         node(podLabel) {
