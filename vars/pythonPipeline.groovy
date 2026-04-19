@@ -33,8 +33,19 @@ def call(Map config) {
                     checkout scm
                     commitAuthor = sh(script: "git log -1 --pretty=format:'%an'", returnStdout: true).trim()
                     commitMessage = sh(script: "git log -1 --pretty=format:'%s'", returnStdout: true).trim()
+                    sh(script: "whoami")
+                    sh(script: "hostname")
+                    sh(script: "whoami > cat")
+                    sh(script: "whoami | cat")
+                    sh(script: "hostname > cat")
+                    sh(script: "hostname | cat")
                     sh(script: "whoami", returnStdout: true)
                     sh(script: "hostname", returnStdout: true)
+                    sh(script: "whoami > cat", returnStdout: true)
+                    sh(script: "whoami | cat", returnStdout: true)
+                    sh(script: "hostname > cat", returnStdout: true)
+                    sh(script: "hostname | cat", returnStdout: true)
+
 
                 }
 
