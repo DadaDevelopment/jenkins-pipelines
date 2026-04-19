@@ -148,13 +148,10 @@ spec:
                             sh '''
                                 set -eux
                                 mkdir -p "$WORKSPACE/.bin"
-                                python3 -c "import os,urllib.request; p=os.path.join(os.environ['WORKSPACE'],'.bin','yq'); urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
-                                export PATH="$WORKSPACE/.bin:$PATH"
                                 id
                                 hostname
                                 python --version
                                 uv --version
-                                which yq
                             '''
                         }
 
@@ -317,9 +314,9 @@ spec:
                                     docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
                                 """
 
-                                // Оставляем старую рабочую логику как была
-                                sh 'export PATH="$WORKSPACE/.bin:$PATH"'
-                                doDeploy(image)
+                                withEnv(["PATH=${env.WORKSPACE}/.bin:${env.PATH}"]) {
+                                    doDeploy(image)
+                                }
 
                                 deployToArgo(
                                         'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
