@@ -60,15 +60,20 @@ spec:
     fsGroup: 1000
   volumes:
     - name: workspace-volume
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 3Gi
     - name: npm-cache
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 1Gi
     - name: yarn-cache
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 1Gi
     - name: pnpm-store
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 1Gi
     - name: docker-graph-storage
-      emptyDir: {}
+      emptyDir:
+        sizeLimit: 5Gi
     - name: docker-certs
       emptyDir: {}
     - name: tools-volume
@@ -78,6 +83,13 @@ spec:
       image: jenkins/inbound-agent:latest
       tty: true
       workingDir: /home/jenkins/agent
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "128Mi"
+        limits:
+          cpu: "300m"
+          memory: "256Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -100,6 +112,13 @@ spec:
           value: /tmp/.local/share/pnpm
         - name: PATH
           value: /tmp/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          cpu: "1500m"
+          memory: "1536Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -124,6 +143,13 @@ spec:
           value: tcp://localhost:2375
         - name: DOCKER_TLS_CERTDIR
           value: ""
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "64Mi"
+        limits:
+          cpu: "250m"
+          memory: "128Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -140,6 +166,13 @@ spec:
       args:
         - --host=tcp://0.0.0.0:2375
         - --host=unix:///var/run/docker.sock
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          cpu: "1500m"
+          memory: "1536Mi"
       volumeMounts:
         - name: docker-graph-storage
           mountPath: /var/lib/docker
