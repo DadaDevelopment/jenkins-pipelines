@@ -145,13 +145,16 @@ spec:
 
                     container('builder') {
                         runStage("Toolchain") {
-                            sh """
+                            sh '''
                                 set -eux
+                                mkdir -p "$WORKSPACE/.bin"
+                                python3 -c "import os,urllib.request; p=os.path.join(os.environ['WORKSPACE'],'.bin','yq'); urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 id
                                 hostname
                                 python --version
                                 uv --version
-                            """
+                                which yq
+                            '''
                         }
 
                         if (usePip) {
@@ -284,6 +287,7 @@ spec:
                     if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
                         container('docker') {
                             runStage('Docker Deploy && Deploy to ArgoCD') {
+
                                 def values
                                 if (!SPLIT_DEV_AND_PROD) {
                                     values = "helm/python/services/${PROJECT_NAME}/values.yaml"
@@ -313,7 +317,7 @@ spec:
                                 """
 
                                 // Оставляем старую рабочую логику как была
-                                sh 'mkdir -p "$WORKSPACE/.bin" && python3 -c "import os,urllib.request; p=os.path.join(os.environ[\'WORKSPACE\'],\'.bin\',\'yq\'); urllib.request.urlretrieve(\'https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64\', p); os.chmod(p,0o755)"'
+                                sh 'export PATH="$WORKSPACE/.bin:$PATH"'
                                 doDeploy(image)
 
                                 deployToArgo(
