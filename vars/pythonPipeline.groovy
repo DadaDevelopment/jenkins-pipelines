@@ -199,7 +199,7 @@ spec:
                                     sh """
                                         set -eux
                                         sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml || true
-                                        uv sync --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
+                                        uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
                                         cp -f '${UV_SETTINGS}' ./uv.toml
                                     """
                                 }
@@ -281,7 +281,7 @@ spec:
                                         fi
                                         python -m build
                                         if [ -f uv.toml ]; then
-                                            uv sync --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
+                                            uv sync --link-mode=copy --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
                                         fi
                                     """
                                 }
@@ -332,16 +332,15 @@ spec:
 
                                 withEnv(["PATH=/tools:${env.PATH}"]) {
                                     doDeploy(image)
-                                }
 
-                                deployToArgo(
-                                        'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
-                                        values,
-                                        result.getTag(),
-                                        commitAuthor,
-                                        commitMessage,
-                                        'develop'
-                                )
+
+                                    deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
+                                            values,
+                                            result.getTag(),
+                                            commitAuthor,
+                                            commitMessage,
+                                            'develop')
+                                }
                             }
                         }
                     }
