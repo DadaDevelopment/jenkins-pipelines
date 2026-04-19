@@ -48,16 +48,16 @@ spec:
   volumes:
     - name: workspace-volume
       emptyDir:
-        sizeLimit: 5Gi
+        sizeLimit: 3Gi
     - name: pip-cache
       emptyDir:
-        sizeLimit: 2Gi
+        sizeLimit: 1Gi
     - name: uv-cache
       emptyDir:
-        sizeLimit: 2Gi
+        sizeLimit: 1Gi
     - name: docker-graph-storage
       emptyDir:
-        sizeLimit: 10Gi
+        sizeLimit: 5Gi
     - name: docker-certs
       emptyDir: {}
     - name: tools-volume
@@ -67,6 +67,13 @@ spec:
       image: jenkins/inbound-agent:latest
       tty: true
       workingDir: /home/jenkins/agent
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
