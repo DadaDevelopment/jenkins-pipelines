@@ -24,6 +24,7 @@ def call(Map config) {
     def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
             .replaceAll('[^A-Za-z0-9-]', '-')
             .toLowerCase()
+    def agentName = "kubeagent-${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}-${UUID.randomUUID().toString().take(6)}"
 
     podTemplate(
             cloud: 'self-managed',
@@ -34,12 +35,13 @@ def call(Map config) {
 apiVersion: v1
 kind: Pod
 metadata:
+  name: ${agentName}
+  annotations:
+    argocd.argoproj.io/tracking-id: "jenkins-common:/Pod:devops-tools/${agentName}"
   labels:
     app.kubernetes.io/name: jenkins-agent
     app.kubernetes.io/part-of: jenkins-common
     app.kubernetes.io/managed-by: jenkins
-  annotations:
-    argocd.argoproj.io/tracking-id='jenkins-common:/Pod:devops-tools/kubeagent-master-35-lvngd-6g96l'
 spec:
   securityContext:
     fsGroup: 1000
