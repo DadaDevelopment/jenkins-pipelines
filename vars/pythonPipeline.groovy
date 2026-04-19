@@ -69,11 +69,11 @@ spec:
       workingDir: /home/jenkins/agent
       resources:
         requests:
-            cpu: "50m"
-            memory: "128Mi"
-          limits:
-            cpu: "300m"
-            memory: "256Mi"
+          cpu: "50m"
+          memory: "128Mi"
+        limits:
+          cpu: "300m"
+          memory: "256Mi"
 
       volumeMounts:
         - name: workspace-volume
