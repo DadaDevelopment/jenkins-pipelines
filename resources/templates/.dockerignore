@@ -16,3 +16,5 @@ Dockerfile*
 README.md
 docs
 tests
+tasks
+openapi.json

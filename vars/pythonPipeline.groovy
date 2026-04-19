@@ -17,7 +17,7 @@ def call(Map config) {
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
 
     def python = 'python' + PYTHON_VER
-    node {
+    node('kubeagent')  {
         cleanWs()
 
         withEnv(["PATH=${env.HOME}/.local/bin:${env.PATH}"]) {
