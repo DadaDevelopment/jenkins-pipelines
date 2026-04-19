@@ -76,9 +76,6 @@ spec:
           value: /home/jenkins/.cache
         - name: PATH
           value: /home/jenkins/.local/bin:/usr/local/bin:/usr/bin:/bin
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
