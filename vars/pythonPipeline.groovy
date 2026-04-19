@@ -313,6 +313,7 @@ spec:
                                 """
 
                                 // Оставляем старую рабочую логику как была
+                                sh 'mkdir -p "$WORKSPACE/.bin" && python3 -c "import os,urllib.request; p=os.path.join(os.environ[\'WORKSPACE\'],\'.bin\',\'yq\'); urllib.request.urlretrieve(\'https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64\', p); os.chmod(p,0o755)"'
                                 doDeploy(image)
 
                                 deployToArgo(
