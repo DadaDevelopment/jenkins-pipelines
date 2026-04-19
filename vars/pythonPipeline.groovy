@@ -44,6 +44,8 @@ metadata:
     app.kubernetes.io/name: jenkins-agent
     app.kubernetes.io/part-of: jenkins-common
     app.kubernetes.io/managed-by: jenkins
+  annotations:
+    argocd.argoproj.io/tracking-id='jenkins-common:/Pod:devops-tools/kubeagent-master-35-lvngd-6g96l'
 spec:
   securityContext:
     fsGroup: 1000
