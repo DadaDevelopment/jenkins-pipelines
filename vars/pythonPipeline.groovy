@@ -16,7 +16,7 @@ def call(Map config) {
     def FAILURE_WEBHOOK_URL = ((config.get('failureWebhookUrl', '') ?: '') as String).trim()
     def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', '') ?: '') as String).trim()
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
-
+    def OVERRIDE_VALUES =  config.get('values_override', '')
     def BUILDER_IMAGE = "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim"
     def DOCKER_CLI_IMAGE = "docker:29-cli"
     def DOCKER_DIND_IMAGE = "docker:29-dind"
@@ -339,13 +339,17 @@ spec:
                             runStage('Docker Deploy && Deploy to ArgoCD') {
 
                                 def values
-                                if (!SPLIT_DEV_AND_PROD) {
-                                    values = "helm/python/services/${PROJECT_NAME}/values.yaml"
-                                } else {
-                                    if (env.BRANCH_NAME == 'master') {
-                                        values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                                if (OVERRIDE_VALUES!=''){
+                                    values = OVERRIDE_VALUES
+                                }else {
+                                    if (!SPLIT_DEV_AND_PROD) {
+                                        values = "helm/python/services/${PROJECT_NAME}/values.yaml"
                                     } else {
-                                        values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                                        if (env.BRANCH_NAME == 'master') {
+                                            values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                                        } else {
+                                            values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                                        }
                                     }
                                 }
 
