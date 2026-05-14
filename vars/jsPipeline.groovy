@@ -56,6 +56,7 @@ metadata:
     app.kubernetes.io/part-of: jenkins-common
     app.kubernetes.io/managed-by: jenkins
 spec:
+  priorityClassName: critical
   securityContext:
     fsGroup: 1000
   volumes:
