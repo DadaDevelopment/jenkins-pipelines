@@ -50,7 +50,7 @@ kind: Pod
 metadata:
   name: ${agentName}
   annotations:
-    argocd.argoproj.io/tracking-id: "jenkins-common:/Pod:devops-tools/${agentName}"
+    argocd.argoproj.io/tracking-id: "jenkins-beget:/Pod:devops-tools/${agentName}"
   labels:
     app.kubernetes.io/name: jenkins-agent
     app.kubernetes.io/part-of: jenkins-common
