@@ -1,5 +1,3 @@
-import groovy.json.JsonOutput
-
 def call(Map config) {
     properties([disableConcurrentBuilds(abortPrevious: true)])
 
@@ -20,6 +18,8 @@ def call(Map config) {
     def BUILDER_IMAGE = "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim"
     def DOCKER_CLI_IMAGE = "docker:29-cli"
     def DOCKER_DIND_IMAGE = "docker:29-dind"
+    def infra = config.get("infra", false)
+
 
     def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
             .replaceAll('[^A-Za-z0-9-]', '-')
@@ -342,13 +342,17 @@ spec:
                                 if (OVERRIDE_VALUES!=''){
                                     values = OVERRIDE_VALUES
                                 }else {
-                                    if (!SPLIT_DEV_AND_PROD) {
-                                        values = "helm/python/services/${PROJECT_NAME}/values.yaml"
+                                    if (infra) {
+                                        values = "helm/${PROJECT_NAME}/values.yaml"
                                     } else {
-                                        if (env.BRANCH_NAME == 'master') {
-                                            values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                                        if (!SPLIT_DEV_AND_PROD) {
+                                            values = "helm/python/services/${PROJECT_NAME}/values.yaml"
                                         } else {
-                                            values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                                            if (env.BRANCH_NAME == 'master') {
+                                                values = "helm/python/services/${PROJECT_NAME}/values-prod.yaml"
+                                            } else {
+                                                values = "helm/python/services/${PROJECT_NAME}/values-dev.yaml"
+                                            }
                                         }
                                     }
                                 }
@@ -369,26 +373,41 @@ spec:
                                     docker version
                                     docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
                                 """
+                                def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
+                                def branch = 'develop'
+                                def authType = 'ssh'
+                                def credentialsId = 'gh-token'
 
                                 withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')]) {
-                                    sh '''
+
+                                    if (infra) {
+                                        credentialsId = 'gh-token'
+                                        authType = 'https'
+                                        branch = 'console-migration'
+                                        repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
+                                    }
+                                    if (authType == 'ssh') {
+                                        sh '''
                                         set -eux
                                         mkdir -p /tmp/.ssh
                                         chmod 700 /tmp/.ssh
                                         ssh-keyscan -p 7999 -H bitbucket.dada-tuda.ru > /tmp/.ssh/known_hosts
                                         chmod 644 /tmp/.ssh/known_hosts
                                     '''
+                                    }
 
                                     def gitSshCmd = "ssh -i ${SSH_KEY} -p 7999 -o IdentitiesOnly=yes -o UserKnownHostsFile=/tmp/.ssh/known_hosts -o StrictHostKeyChecking=yes"
 
                                     withEnv(["PATH=/tools:${env.PATH}", "GIT_SSH_COMMAND=${gitSshCmd}"]) {
                                         doDeploy(image)
-                                        deployToArgo('ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
-                                                values,
-                                                result.getTag(),
-                                                commitAuthor,
-                                                commitMessage,
-                                                'develop')
+                                        deployToArgo(repoUrl: repoUrl,
+                                                valueFilePath: values,
+                                                newTag: result.getTag(),
+                                                commitAuthor: commitAuthor,
+                                                commitMessage: commitMessage,
+                                                branch: branch,
+                                                credentialsId: credentialsId,
+                                                authType: authType,)
                                     }
                                 }
                             }
