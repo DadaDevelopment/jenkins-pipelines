@@ -334,7 +334,7 @@ spec:
                         }
                     }
 
-                    if (!isPR() && deploy_build && (env.BRANCH_NAME == 'develop' || env.BRANCH_NAME == 'master')) {
+                    if (!isPR() && deploy_build ) {
                         container('docker') {
                             runStage('Docker Deploy && Deploy to ArgoCD') {
 
