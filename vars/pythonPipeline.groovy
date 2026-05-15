@@ -215,13 +215,12 @@ spec:
                                         set -eux
                                         python -m venv venv
                                         . venv/bin/activate
-                                        python -m ensurepip
                                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
-                                    python -m pip install --upgrade pip setuptools wheel
-                                        python -m pip install -r requirements.txt
+                                        uv pip install --upgrade pip setuptools wheel
+                                        uv pip install -r requirements.txt
 
                                         if [ -f requirements-dev.txt ]; then
-                                            python -m pip install -r requirements-dev.txt
+                                            uv pip install -r requirements-dev.txt
                                         fi
                                     """
                                 }
@@ -267,8 +266,8 @@ spec:
                                     echo "⚠️  No tests found — skipping pytest"
                                 else
                                     echo "✓ Tests detected — running pytest"
-                                    ${fileExists("pyproject.toml") ? 'uv' : 'python -m'} pip install pytest pytest-cov pytest-asyncio testcontainers
-                                    ${fileExists("pyproject.toml") ? 'uv run pytest' : 'python -m pytest'} --junitxml test-results.xml
+                                    uv pip install pytest pytest-cov pytest-asyncio testcontainers
+                                    uv run pytest --junitxml test-results.xml
                                 fi
                             """
 
@@ -307,7 +306,7 @@ spec:
                                 script {
                                     sh """
                                         set -x
-                                        ${fileExists("pyproject.toml") ? 'uv' : 'python -m'} pip install build
+                                        uv pip install build
                                         if [ -f ".venv/bin/activate" ]; then
                                             . .venv/bin/activate
                                         elif [ -f "venv/bin/activate" ]; then
