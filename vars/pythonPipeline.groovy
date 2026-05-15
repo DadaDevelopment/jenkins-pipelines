@@ -400,14 +400,14 @@ spec:
 
                                     withEnv(["PATH=/tools:${env.PATH}", "GIT_SSH_COMMAND=${gitSshCmd}"]) {
                                         doDeploy(image)
-                                        deployToArgo(repoUrl: repoUrl,
-                                                valueFilePath: values,
-                                                newTag: result.getTag(),
-                                                commitAuthor: commitAuthor,
-                                                commitMessage: commitMessage,
-                                                branch: branch,
-                                                credentialsId: credentialsId,
-                                                authType: authType,)
+                                        deployToArgo(repoUrl,
+                                                values,
+                                                 result.getTag(),
+                                                 commitAuthor,
+                                                 commitMessage,
+                                                 branch,
+                                                 credentialsId,
+                                                authType,)
                                     }
                                 }
                             }
