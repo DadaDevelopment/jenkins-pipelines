@@ -16,15 +16,11 @@ def call(Map config) {
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
     def OVERRIDE_VALUES =  config.get('values_override', '')
     def BUILDER_IMAGE = "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim"
-    def DOCKER_CLI_IMAGE = "docker:29-cli"
-    def DOCKER_DIND_IMAGE = "docker:29-dind"
     def infra = config.get("infra", false)
     kubePodTemplate(
             builderProfile: 'python',
             builderImage: BUILDER_IMAGE,
             withDocker: true,
-            dockerCliImage: DOCKER_CLI_IMAGE,
-            dockerDindImage: DOCKER_DIND_IMAGE
     ) {
 
             withEnv(["PATH=${env.HOME}/.local/bin:${env.PATH}"]) {
@@ -93,7 +89,7 @@ def call(Map config) {
                                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
                                     sh """
                                         set -eux
-                                        sed -i "s/^requires-python *= *\\"==[0-9.]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml || true
+                                        sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml || true
                                         uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
                                         cp -f '${UV_SETTINGS}' ./uv.toml
                                     """
@@ -186,6 +182,7 @@ def call(Map config) {
                                 runStage("PythonDeploy") {
                                     sh """
                                         set -eux
+                                        uv pip install twine
                                         twine upload -r nexus dist/* --config-file .pypirc
                                     """
                                 }

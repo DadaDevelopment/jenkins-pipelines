@@ -25,8 +25,6 @@ def call(Map config) {
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
 
     def BUILDER_IMAGE = ((config.get('builderImage', 'node:20-bookworm') ?: 'node:20-bookworm') as String).trim()
-    def DOCKER_CLI_IMAGE = "docker:29-cli"
-    def DOCKER_DIND_IMAGE = "docker:29-dind"
 
     def OPENAPI_BASE_URL = ((config.get('openapiBaseUrl', 'https://profi-backend.dada-tuda.ru') ?: '') as String).trim()
     def OPENAPI_SYNC_SOURCE = ((config.get('openapiSyncSource', 'prod') ?: '') as String).trim()
@@ -38,8 +36,6 @@ def call(Map config) {
             builderProfile: 'node',
             builderImage: BUILDER_IMAGE,
             withDocker: true,
-            dockerCliImage: DOCKER_CLI_IMAGE,
-            dockerDindImage: DOCKER_DIND_IMAGE
     ) {
 
             def runStage = { String stageName, Closure body ->
