@@ -34,155 +34,13 @@ def call(Map config) {
     def DOCKERFILE_OVERRIDE = ((config.get('dockerfile', 'Dockerfile') ?: 'Dockerfile') as String).trim()
     def DOCKER_CONTEXT = ((config.get('dockerContext', '.') ?: '.') as String).trim()
 
-    def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
-            .replaceAll('[^A-Za-z0-9-]', '-')
-            .toLowerCase()
-    def agentName = "kubeagent-${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}-${UUID.randomUUID().toString().take(6)}"
-
-    podTemplate(
-            cloud: 'self-managed',
-            label: podLabel,
-            namespace: 'devops-tools',
-            serviceAccount: 'jenkins-admin',
-            yaml: """
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ${agentName}
-  annotations:
-    argocd.argoproj.io/tracking-id: jenkins-beget:/Pod:devops-tools/${agentName}
-  labels:
-    app.kubernetes.io/name: jenkins-agent
-    app.kubernetes.io/part-of: jenkins-common
-    app.kubernetes.io/managed-by: jenkins
-spec:
-  priorityClassName: critical
-  securityContext:
-    fsGroup: 1000
-  volumes:
-    - name: workspace-volume
-      emptyDir:
-        sizeLimit: 3Gi
-    - name: npm-cache
-      emptyDir:
-        sizeLimit: 1Gi
-    - name: yarn-cache
-      emptyDir:
-        sizeLimit: 1Gi
-    - name: pnpm-store
-      emptyDir:
-        sizeLimit: 1Gi
-    - name: docker-graph-storage
-      emptyDir:
-        sizeLimit: 5Gi
-    - name: docker-certs
-      emptyDir: {}
-    - name: tools-volume
-      emptyDir: {}
-  containers:
-    - name: jnlp
-      image: jenkins/inbound-agent:latest
-      tty: true
-      workingDir: /home/jenkins/agent
-      resources:
-        requests:
-          cpu: "50m"
-          memory: "128Mi"
-        limits:
-          cpu: "300m"
-          memory: "256Mi"
-      volumeMounts:
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-        - name: tools-volume
-          mountPath: /tools
-
-    - name: builder
-      image: ${BUILDER_IMAGE}
-      command: ['cat']
-      tty: true
-      workingDir: /home/jenkins/agent
-      env:
-        - name: HOME
-          value: /tmp
-        - name: NPM_CONFIG_CACHE
-          value: /tmp/.cache/npm
-        - name: YARN_CACHE_FOLDER
-          value: /tmp/.cache/yarn
-        - name: PNPM_HOME
-          value: /tmp/.local/share/pnpm
-        - name: PATH
-          value: /tmp/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      resources:
-        requests:
-          cpu: "250m"
-          memory: "512Mi"
-        limits:
-          cpu: "1500m"
-          memory: "1536Mi"
-      volumeMounts:
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-        - name: npm-cache
-          mountPath: /tmp/.cache/npm
-        - name: yarn-cache
-          mountPath: /tmp/.cache/yarn
-        - name: pnpm-store
-          mountPath: /tmp/.local/share/pnpm
-        - name: tools-volume
-          mountPath: /tools
-
-    - name: docker
-      image: ${DOCKER_CLI_IMAGE}
-      command: ['sh', '-c', 'cat']
-      tty: true
-      workingDir: /home/jenkins/agent
-      env:
-        - name: HOME
-          value: /tmp
-        - name: DOCKER_HOST
-          value: tcp://localhost:2375
-        - name: DOCKER_TLS_CERTDIR
-          value: ""
-      resources:
-        requests:
-          cpu: "50m"
-          memory: "64Mi"
-        limits:
-          cpu: "250m"
-          memory: "128Mi"
-      volumeMounts:
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-        - name: tools-volume
-          mountPath: /tools
-
-    - name: dind
-      image: ${DOCKER_DIND_IMAGE}
-      securityContext:
-        privileged: true
-      env:
-        - name: DOCKER_TLS_CERTDIR
-          value: ""
-      args:
-        - --host=tcp://0.0.0.0:2375
-        - --host=unix:///var/run/docker.sock
-      resources:
-        requests:
-          cpu: "250m"
-          memory: "512Mi"
-        limits:
-          cpu: "1500m"
-          memory: "1536Mi"
-      volumeMounts:
-        - name: docker-graph-storage
-          mountPath: /var/lib/docker
-        - name: docker-certs
-          mountPath: /certs
-"""
+    kubePodTemplate(
+            builderProfile: 'node',
+            builderImage: BUILDER_IMAGE,
+            withDocker: true,
+            dockerCliImage: DOCKER_CLI_IMAGE,
+            dockerDindImage: DOCKER_DIND_IMAGE
     ) {
-        node(podLabel) {
-            cleanWs()
 
             def runStage = { String stageName, Closure body ->
                 currentStageName = stageName
@@ -511,4 +369,3 @@ spec:
             }
         }
     }
-}

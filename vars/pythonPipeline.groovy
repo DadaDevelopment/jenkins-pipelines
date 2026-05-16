@@ -19,156 +19,13 @@ def call(Map config) {
     def DOCKER_CLI_IMAGE = "docker:29-cli"
     def DOCKER_DIND_IMAGE = "docker:29-dind"
     def infra = config.get("infra", false)
-
-
-    def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
-            .replaceAll('[^A-Za-z0-9-]', '-')
-            .toLowerCase()
-    def agentName = "kubeagent-${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}-${UUID.randomUUID().toString().take(6)}"
-
-    podTemplate(
-            cloud: 'self-managed',
-            label: podLabel,
-            namespace: 'devops-tools',
-            serviceAccount: 'jenkins-admin',
-            yaml: """
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ${agentName}
-  annotations:
-    argocd.argoproj.io/tracking-id: jenkins-beget:/Pod:devops-tools/${agentName}
-  labels:
-    app.kubernetes.io/name: jenkins-agent
-    app.kubernetes.io/part-of: jenkins-common
-    app.kubernetes.io/managed-by: jenkins
-spec:
-  priorityClassName: critical
-  securityContext:
-    fsGroup: 1000
-  volumes:
-    - name: workspace-volume
-      emptyDir:
-        sizeLimit: 3Gi
-    - name: pip-cache
-      emptyDir:
-        sizeLimit: 1Gi
-    - name: uv-cache
-      emptyDir:
-        sizeLimit: 1Gi
-    - name: docker-graph-storage
-      emptyDir:
-        sizeLimit: 5Gi
-    - name: docker-certs
-      emptyDir: {}
-    - name: tools-volume
-      emptyDir: {}
-  containers:
-    - name: jnlp
-      image: jenkins/inbound-agent:latest
-      tty: true
-      workingDir: /home/jenkins/agent
-      resources:
-        requests:
-          cpu: "50m"
-          memory: "128Mi"
-        limits:
-          cpu: "300m"
-          memory: "256Mi"
-
-      volumeMounts:
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-        - name: tools-volume
-          mountPath: /tools
-
-    - name: builder
-      image: ${BUILDER_IMAGE}
-      command: ['cat']
-      tty: true
-      workingDir: /home/jenkins/agent
-      env:
-        - name: HOME
-          value: /tmp
-        - name: PIP_CACHE_DIR
-          value: /tmp/.cache/pip
-        - name: UV_CACHE_DIR
-          value: /tmp/.cache/uv
-        - name: XDG_CACHE_HOME
-          value: /tmp/.cache
-        - name: PATH
-          value: /home/jenkins/.local/bin:/usr/local/bin:/usr/bin:/bin
-      resources:
-        requests:
-          cpu: "250m"
-          memory: "512Mi"
-        limits:
-          cpu: "1500m"
-          memory: "1536Mi"
-
-      volumeMounts:
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-        - name: pip-cache
-          mountPath: /tmp/.cache/pip
-        - name: uv-cache
-          mountPath: /tmp/.cache/uv
-        - name: tools-volume
-          mountPath: /tools
-
-    - name: docker
-      image: ${DOCKER_CLI_IMAGE}
-      command: ['sh', '-c', 'cat']
-      tty: true
-      workingDir: /home/jenkins/agent
-      env:
-        - name: HOME
-          value: /tmp
-        - name: DOCKER_HOST
-          value: tcp://localhost:2375
-        - name: DOCKER_TLS_CERTDIR
-          value: ""
-      resources:
-        requests:
-          cpu: "50m"
-          memory: "64Mi"
-        limits:
-          cpu: "250m"
-          memory: "128Mi"
-      volumeMounts:
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-        - name: tools-volume
-          mountPath: /tools
-
-    - name: dind
-      image: ${DOCKER_DIND_IMAGE}
-      securityContext:
-        privileged: true
-      env:
-        - name: DOCKER_TLS_CERTDIR
-          value: ""
-      args:
-        - --host=tcp://0.0.0.0:2375
-        - --host=unix:///var/run/docker.sock
-      resources:
-        requests:
-          cpu: "250m"
-          memory: "512Mi"
-        limits:
-          cpu: "1500m"
-          memory: "1536Mi"
-      volumeMounts:
-        - name: docker-graph-storage
-          mountPath: /var/lib/docker
-        - name: docker-certs
-          mountPath: /certs
-        - name: workspace-volume
-          mountPath: /home/jenkins/agent
-"""
+    kubePodTemplate(
+            builderProfile: 'python',
+            builderImage: BUILDER_IMAGE,
+            withDocker: true,
+            dockerCliImage: DOCKER_CLI_IMAGE,
+            dockerDindImage: DOCKER_DIND_IMAGE
     ) {
-        node(podLabel) {
-            cleanWs()
 
             withEnv(["PATH=${env.HOME}/.local/bin:${env.PATH}"]) {
                 def runStage = { String stageName, Closure body ->
@@ -194,6 +51,7 @@ spec:
                                 set -eux
                                 python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 /tools/yq --version
+                                apt-get update
                                 apt-get install -y gcc python3-dev libpq-dev
                               '''
                             withEnv(["PATH=/tools:${env.PATH}"]) {
@@ -433,7 +291,6 @@ spec:
                     )
                     throw err
                 }
-            }
-        }
     }
+}
 }
