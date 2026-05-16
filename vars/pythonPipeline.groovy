@@ -232,7 +232,7 @@ def call(Map config) {
                                 def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
                                 def branch = 'develop'
                                 def authType = 'ssh'
-                                def credentialsId = 'gh-token'
+                                def credentialsId = 'bitbucket-jenkins'
 
                                 withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')]) {
 

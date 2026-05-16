@@ -1,5 +1,3 @@
-import groovy.json.JsonOutput
-
 def call(Map config) {
     properties([disableConcurrentBuilds(abortPrevious: true)])
 
@@ -11,6 +9,7 @@ def call(Map config) {
     if (!PROJECT_NAME) {
         error("config.projectName is required")
     }
+    def infra = config.get("infra", false)
 
     def NODE_VER = (config.get('node', '20.19.5') as String).trim()
     def YARN_VER = (config.get('yarn', '4.11.0') as String).trim()
@@ -275,15 +274,21 @@ def call(Map config) {
                     container('docker') {
                         runStage('Docker Deploy && Deploy to ArgoCD') {
                             def values
-                            if (VALUES_PATH_OVERRIDE) {
+                            if (VALUES_PATH_OVERRIDE != '') {
                                 values = VALUES_PATH_OVERRIDE
-                            } else if (!SPLIT_DEV_AND_PROD) {
-                                values = "helm/javascript/services/${PROJECT_NAME}/values.yaml"
                             } else {
-                                if (env.BRANCH_NAME == 'master') {
-                                    values = "helm/javascript/services/${PROJECT_NAME}/values-prod.yaml"
+                                if (infra) {
+                                    values = "helm/${PROJECT_NAME}/values.yaml"
                                 } else {
-                                    values = "helm/javascript/services/${PROJECT_NAME}/values-dev.yaml"
+                                    if (!SPLIT_DEV_AND_PROD) {
+                                        values = "helm/javascript/services/${PROJECT_NAME}/values.yaml"
+                                    } else {
+                                        if (env.BRANCH_NAME == 'master') {
+                                            values = "helm/javascript/services/${PROJECT_NAME}/values-prod.yaml"
+                                        } else {
+                                            values = "helm/javascript/services/${PROJECT_NAME}/values-dev.yaml"
+                                        }
+                                    }
                                 }
                             }
 
@@ -303,18 +308,30 @@ def call(Map config) {
                                 docker version
                                 docker build -f ${dockerfile} -t ${image} ${DOCKER_CONTEXT}
                             """
+                            def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
+                            def branch = 'develop'
+                            def authType = 'ssh'
+                            def credentialsId = 'bitbucket-jenkins'
 
                             withCredentials([
                                     usernamePassword(credentialsId: 'docker-nexus-admin-psws', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_LOGIN'),
                                     sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')
                             ]) {
-                                sh '''
+                                if (infra) {
+                                    credentialsId = 'gh-token'
+                                    authType = 'https'
+                                    branch = 'console-migration'
+                                    repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
+                                }
+                                if (authType == 'ssh') {
+                                    sh '''
                                     set -eux
                                     mkdir -p /tmp/.ssh
                                     chmod 700 /tmp/.ssh
                                     ssh-keyscan -p 7999 -H bitbucket.dada-tuda.ru > /tmp/.ssh/known_hosts
                                     chmod 644 /tmp/.ssh/known_hosts
                                 '''
+                                }
 
                                 def gitSshCmd = "ssh -i ${SSH_KEY} -p 7999 -o IdentitiesOnly=yes -o UserKnownHostsFile=/tmp/.ssh/known_hosts -o StrictHostKeyChecking=yes"
 
@@ -329,13 +346,14 @@ def call(Map config) {
                                         docker rmi ${image} || true
                                     """
 
-                                    deployToArgo(
-                                            'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
+                                    deployToArgo(repoUrl,
                                             values,
                                             result.getTag(),
                                             commitAuthor,
                                             commitMessage,
-                                            'develop'
+                                            branch,
+                                            credentialsId,
+                                            authType
                                     )
                                 }
                             }
