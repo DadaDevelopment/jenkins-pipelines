@@ -194,6 +194,7 @@ spec:
                                 set -eux
                                 python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 /tools/yq --version
+                                apt-get install -y gcc python3-dev libpq-dev
                               '''
                             withEnv(["PATH=/tools:${env.PATH}"]) {
                                 sh '''
