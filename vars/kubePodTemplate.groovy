@@ -77,9 +77,11 @@ ${cacheVols}${dockerVols}
         requests:
           cpu: "50m"
           memory: "128Mi"
+          ephemeral-storage: "256Mi"
         limits:
           cpu: "300m"
           memory: "256Mi"
+          ephemeral-storage: "512Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -99,9 +101,11 @@ ${builderEnv}
         requests:
           cpu: "250m"
           memory: "512Mi"
+          ephemeral-storage: "1Gi"
         limits:
           cpu: "1500m"
           memory: "1536Mi"
+          ephemeral-storage: "3Gi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -258,9 +262,11 @@ String _dockerContainers(String dockerCli, String dockerDind) {
         requests:
           cpu: "250m"
           memory: "512Mi"
+          ephemeral-storage: "128Mi"
         limits:
           cpu: "1500m"
           memory: "1536Mi"
+          ephemeral-storage: "512Mi"
       volumeMounts:
         - name: docker-graph-storage
           mountPath: /var/lib/docker
