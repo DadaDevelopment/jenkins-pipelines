@@ -89,7 +89,7 @@ def call(Map config) {
                                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
                                     sh """
                                         set -eux
-                                        sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==${PYTHON_VER}\\"/" pyproject.toml || true
+                                        sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==${PYTHON_VER}.*\\"/" pyproject.toml || true
                                         uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
                                         cp -f '${UV_SETTINGS}' ./uv.toml
                                     """
