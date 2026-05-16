@@ -183,7 +183,7 @@ def call(Map config) {
                                     sh """
                                         set -eux
                                         uv pip install twine
-                                        twine upload -r nexus dist/* --config-file .pypirc
+                                        uv run twine upload -r nexus dist/* --config-file .pypirc
                                     """
                                 }
                             }
