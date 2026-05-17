@@ -64,7 +64,7 @@ spec:
   volumes:
     - name: workspace-volume
       emptyDir:
-        sizeLimit: 3Gi
+        sizeLimit: 8Gi
 ${cacheVols}${dockerVols}
     - name: tools-volume
       emptyDir: {}
@@ -101,11 +101,11 @@ ${builderEnv}
         requests:
           cpu: "250m"
           memory: "512Mi"
-          ephemeral-storage: "1Gi"
+          ephemeral-storage: "2Gi"
         limits:
           cpu: "1500m"
           memory: "1536Mi"
-          ephemeral-storage: "3Gi"
+          ephemeral-storage: "8Gi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
