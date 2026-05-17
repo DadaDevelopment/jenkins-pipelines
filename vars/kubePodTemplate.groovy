@@ -239,9 +239,11 @@ String _dockerContainers(String dockerCli, String dockerDind) {
         requests:
           cpu: "50m"
           memory: "64Mi"
+          ephemeral-storage: "128Mi"
         limits:
           cpu: "250m"
           memory: "128Mi"
+          ephemeral-storage: "256Mi"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
