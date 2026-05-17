@@ -152,7 +152,7 @@ String _dockerVolumes() {
     '''\
     - name: docker-graph-storage
       emptyDir:
-        sizeLimit: 5Gi
+        sizeLimit: 15Gi
     - name: docker-certs
       emptyDir: {}'''
 }
@@ -261,11 +261,11 @@ String _dockerContainers(String dockerCli, String dockerDind) {
       resources:
         requests:
           cpu: "250m"
-          memory: "512Mi"
+          memory: "1Gi"
           ephemeral-storage: "128Mi"
         limits:
-          cpu: "1500m"
-          memory: "1536Mi"
+          cpu: "2000m"
+          memory: "4Gi"
           ephemeral-storage: "512Mi"
       volumeMounts:
         - name: docker-graph-storage
