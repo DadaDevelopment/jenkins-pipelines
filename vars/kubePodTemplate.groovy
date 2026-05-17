@@ -260,8 +260,8 @@ String _dockerContainers(String dockerCli, String dockerDind) {
         - --host=unix:///var/run/docker.sock
       resources:
         requests:
-          cpu: "250m"
-          memory: "1Gi"
+          cpu: "500m"
+          memory: "3Gi"
           ephemeral-storage: "128Mi"
         limits:
           cpu: "2000m"
