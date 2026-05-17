@@ -13,4 +13,4 @@
 - Local `groovyc` validation passed in a container.
 - Jenkins replay build `DADA-TUDA/spring.event-fabrique/PR-27 #4` finished `SUCCESS` with the podTemplate-based spring pipeline.
 - `groovyc` passed for `vars/kubePodTemplate.groovy`, `vars/springPipeline.groovy`, `vars/pythonPipeline.groovy`, and `vars/jsPipeline.groovy` after moving the pod YAML into the shared helper.
-- `docker` and `dind` sidecars now declare explicit `ephemeral-storage` requests/limits to avoid the node pressure / exit 137 path.
+- `python` and `node` pod profiles now ask for materially higher `ephemeral-storage` so they avoid almost-full nodes; `docker` and `dind` also declare explicit requests/limits.

@@ -37,14 +37,15 @@ String _buildYaml(String agentName, Map cfg) {
     def withDocker = cfg.get('withDocker', false) as boolean
     def dockerCli  = cfg.get('dockerCliImage', 'docker:29-cli') as String
     def dockerDind = cfg.get('dockerDindImage', 'docker:29-dind') as String
+    def storage = _storageProfile(profile, withDocker)
 
     if (!builderImg) error('kubePodTemplate: builderImage is required')
 
     def cacheVols   = _cacheVolumes(profile)
-    def dockerVols  = withDocker ? "\n${_dockerVolumes()}" : ''
+    def dockerVols  = withDocker ? "\n${_dockerVolumes(storage.dockerGraphStorageSizeLimit)}" : ''
     def builderEnv  = _builderEnv(profile)
     def builderMnts = _builderMounts(profile)
-    def dockerCtrs  = withDocker ? "\n\n${_dockerContainers(dockerCli, dockerDind)}" : ''
+    def dockerCtrs  = withDocker ? "\n\n${_dockerContainers(dockerCli, dockerDind, storage)}" : ''
 
     """\
 apiVersion: v1
@@ -77,11 +78,11 @@ ${cacheVols}${dockerVols}
         requests:
           cpu: "50m"
           memory: "128Mi"
-          ephemeral-storage: "256Mi"
+          ephemeral-storage: "${storage.jnlpEphemeralRequest}"
         limits:
           cpu: "300m"
           memory: "256Mi"
-          ephemeral-storage: "512Mi"
+          ephemeral-storage: "${storage.jnlpEphemeralLimit}"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -101,11 +102,11 @@ ${builderEnv}
         requests:
           cpu: "250m"
           memory: "512Mi"
-          ephemeral-storage: "2Gi"
+          ephemeral-storage: "${storage.builderEphemeralRequest}"
         limits:
           cpu: "1500m"
           memory: "1536Mi"
-          ephemeral-storage: "8Gi"
+          ephemeral-storage: "${storage.builderEphemeralLimit}"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -148,11 +149,11 @@ String _cacheVolumes(String profile) {
     }
 }
 
-String _dockerVolumes() {
+String _dockerVolumes(String dockerGraphStorageSizeLimit) {
     '''\
     - name: docker-graph-storage
       emptyDir:
-        sizeLimit: 15Gi
+        sizeLimit: ''' + dockerGraphStorageSizeLimit + '''
     - name: docker-certs
       emptyDir: {}'''
 }
@@ -221,7 +222,7 @@ String _builderMounts(String profile) {
 
 // ── Docker sidecar containers (shared between js and python) ──────────────────
 
-String _dockerContainers(String dockerCli, String dockerDind) {
+String _dockerContainers(String dockerCli, String dockerDind, Map storage) {
     """\
     - name: docker
       image: ${dockerCli}
@@ -239,11 +240,11 @@ String _dockerContainers(String dockerCli, String dockerDind) {
         requests:
           cpu: "50m"
           memory: "64Mi"
-          ephemeral-storage: "128Mi"
+          ephemeral-storage: "${storage.dockerEphemeralRequest}"
         limits:
           cpu: "250m"
           memory: "128Mi"
-          ephemeral-storage: "256Mi"
+          ephemeral-storage: "${storage.dockerEphemeralLimit}"
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
@@ -264,11 +265,11 @@ String _dockerContainers(String dockerCli, String dockerDind) {
         requests:
           cpu: "500m"
           memory: "3Gi"
-          ephemeral-storage: "128Mi"
+          ephemeral-storage: "${storage.dindEphemeralRequest}"
         limits:
           cpu: "2000m"
           memory: "4Gi"
-          ephemeral-storage: "512Mi"
+          ephemeral-storage: "${storage.dindEphemeralLimit}"
       volumeMounts:
         - name: docker-graph-storage
           mountPath: /var/lib/docker
@@ -276,4 +277,57 @@ String _dockerContainers(String dockerCli, String dockerDind) {
           mountPath: /certs
         - name: workspace-volume
           mountPath: /home/jenkins/agent"""
+}
+
+Map _storageProfile(String profile, boolean withDocker) {
+    switch (profile) {
+        case 'maven':
+            return [
+                    jnlpEphemeralRequest      : '256Mi',
+                    jnlpEphemeralLimit        : '512Mi',
+                    builderEphemeralRequest   : '2Gi',
+                    builderEphemeralLimit     : '4Gi',
+                    dockerEphemeralRequest    : '0Mi',
+                    dockerEphemeralLimit      : '0Mi',
+                    dindEphemeralRequest      : '0Mi',
+                    dindEphemeralLimit        : '0Mi',
+                    dockerGraphStorageSizeLimit: '4Gi',
+            ]
+        case 'python':
+            return [
+                    jnlpEphemeralRequest      : '256Mi',
+                    jnlpEphemeralLimit        : '512Mi',
+                    builderEphemeralRequest   : '4Gi',
+                    builderEphemeralLimit     : '8Gi',
+                    dockerEphemeralRequest    : withDocker ? '512Mi' : '0Mi',
+                    dockerEphemeralLimit      : withDocker ? '1Gi' : '0Mi',
+                    dindEphemeralRequest      : withDocker ? '2Gi' : '0Mi',
+                    dindEphemeralLimit        : withDocker ? '4Gi' : '0Mi',
+                    dockerGraphStorageSizeLimit: withDocker ? '8Gi' : '0Gi',
+            ]
+        case 'node':
+            return [
+                    jnlpEphemeralRequest      : '256Mi',
+                    jnlpEphemeralLimit        : '512Mi',
+                    builderEphemeralRequest   : '4Gi',
+                    builderEphemeralLimit     : '8Gi',
+                    dockerEphemeralRequest    : withDocker ? '512Mi' : '0Mi',
+                    dockerEphemeralLimit      : withDocker ? '1Gi' : '0Mi',
+                    dindEphemeralRequest      : withDocker ? '2Gi' : '0Mi',
+                    dindEphemeralLimit        : withDocker ? '4Gi' : '0Mi',
+                    dockerGraphStorageSizeLimit: withDocker ? '8Gi' : '0Gi',
+            ]
+        default:
+            return [
+                    jnlpEphemeralRequest      : '256Mi',
+                    jnlpEphemeralLimit        : '512Mi',
+                    builderEphemeralRequest   : '2Gi',
+                    builderEphemeralLimit     : '4Gi',
+                    dockerEphemeralRequest    : withDocker ? '512Mi' : '0Mi',
+                    dockerEphemeralLimit      : withDocker ? '1Gi' : '0Mi',
+                    dindEphemeralRequest      : withDocker ? '1Gi' : '0Mi',
+                    dindEphemeralLimit        : withDocker ? '2Gi' : '0Mi',
+                    dockerGraphStorageSizeLimit: withDocker ? '4Gi' : '0Gi',
+            ]
+    }
 }
