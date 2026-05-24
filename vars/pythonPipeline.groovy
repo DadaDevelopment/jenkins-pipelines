@@ -100,17 +100,17 @@ def call(Map config) {
                         }
 
                         runStage("Test & Lint") {
-                            if (fileExists(".venv/bin/activate")) {
-                                sh '. .venv/bin/activate'
-                            } else if (fileExists("venv/bin/activate")) {
-                                sh '. venv/bin/activate'
-                            } else {
-                                echo "⚠️  No virtualenv (.venv or venv) found — cannot run tests"
-                                return
-                            }
-
                             sh """
                                 set -eux
+                                if [ -f ".venv/bin/activate" ]; then
+                                    . .venv/bin/activate
+                                elif [ -f "venv/bin/activate" ]; then
+                                    . venv/bin/activate
+                                else
+                                    echo "⚠️  No virtualenv (.venv or venv) found — cannot run tests"
+                                    exit 0
+                                fi
+
                                 export PYTHONPATH="\$PWD:\${PYTHONPATH:-}"
 
                                 echo "Checking for tests..."
@@ -161,7 +161,6 @@ def call(Map config) {
                                 script {
                                     sh """
                                         set -x
-                                        uv pip install build
                                         if [ -f ".venv/bin/activate" ]; then
                                             . .venv/bin/activate
                                         elif [ -f "venv/bin/activate" ]; then
@@ -170,6 +169,7 @@ def call(Map config) {
                                             echo "⚠️  No virtualenv (.venv or venv) found — cannot build"
                                             exit 1
                                         fi
+                                        uv pip install build
                                         python -m build
                                         if [ -f uv.toml ]; then
                                             uv sync --link-mode=copy --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
