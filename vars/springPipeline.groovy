@@ -9,6 +9,7 @@ def call(Map config) {
     if (!PROJECT_NAME) {
         error("config.projectName is required")
     }
+    def infra = config.get("infra", false)
     def SUBMODULE = config.get('submodule', '')
     def JDK_IMAGE_VERSION = (((config.get('jdk', 'openjdk-17-jdk') as String).replaceAll('[^0-9]', '') ?: '17') as String).trim()
     def BUILDER_IMAGE = ((config.get('builderImage', "maven:3.9.9-eclipse-temurin-${JDK_IMAGE_VERSION}") ?: "maven:3.9.9-eclipse-temurin-${JDK_IMAGE_VERSION}") as String).trim()
@@ -42,10 +43,27 @@ def call(Map config) {
 
                     stage('Docker Deploy && Deploy to ArgoCD') {
                         def values
-                        if (env.BRANCH_NAME == 'master') {
-                            values = "helm/spring/services/${PROJECT_NAME}/values-prod.yaml"
+                        def repoUrl
+                        def branch
+                        def credentialsId
+                        def authType
+
+                        if (infra) {
+                            values = "clusters/beget-prod/projects/example-project/environments/prod/apps/${PROJECT_NAME}/values.yaml"
+                            repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
+                            branch = 'console-migration'
+                            credentialsId = 'gh-token'
+                            authType = 'https'
                         } else {
-                            values = "helm/spring/services/${PROJECT_NAME}/values-dev.yaml"
+                            if (env.BRANCH_NAME == 'master') {
+                                values = "helm/spring/services/${PROJECT_NAME}/values-prod.yaml"
+                            } else {
+                                values = "helm/spring/services/${PROJECT_NAME}/values-dev.yaml"
+                            }
+                            repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
+                            branch = 'develop'
+                            credentialsId = 'bitbucket-jenkins'
+                            authType = 'ssh'
                         }
 
                         def result = deployDockerImageToNexus("${PROJECT_NAME}-service",
@@ -53,12 +71,14 @@ def call(Map config) {
                                 "-Dmaven.repo.local=/root/.m2/repository/ -ntp -U ${buildPath}")
 
                         deployToArgo(
-                                'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git',
+                                repoUrl,
                                 values,
                                 result,
                                 commitAuthor,
                                 commitMessage,
-                                'develop'
+                                branch,
+                                credentialsId,
+                                authType
                         )
                     }
                 }

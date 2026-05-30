@@ -278,7 +278,7 @@ def call(Map config) {
                                 values = VALUES_PATH_OVERRIDE
                             } else {
                                 if (infra) {
-                                    values = "helm/${PROJECT_NAME}/values.yaml"
+                                    values = "clusters/beget-prod/projects/example-project/environments/prod/apps/${PROJECT_NAME}/values.yaml"
                                 } else {
                                     if (!SPLIT_DEV_AND_PROD) {
                                         values = "helm/javascript/services/${PROJECT_NAME}/values.yaml"
