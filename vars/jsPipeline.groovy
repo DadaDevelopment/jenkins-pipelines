@@ -10,6 +10,8 @@ def call(Map config) {
         error("config.projectName is required")
     }
     def infra = config.get("infra", false)
+    def INFRA_PROJECT = ((config.get('infraProject', 'example-project') ?: 'example-project') as String).trim()
+    def INFRA_ENV = ((config.get('infraEnv', 'prod') ?: 'prod') as String).trim()
 
     def NODE_VER = (config.get('node', '20.19.5') as String).trim()
     def YARN_VER = (config.get('yarn', '4.11.0') as String).trim()
@@ -278,7 +280,7 @@ def call(Map config) {
                                 values = VALUES_PATH_OVERRIDE
                             } else {
                                 if (infra) {
-                                    values = "clusters/beget-prod/projects/example-project/environments/prod/apps/${PROJECT_NAME}/values.yaml"
+                                    values = "clusters/beget-prod/projects/${INFRA_PROJECT}/environments/${INFRA_ENV}/apps/${PROJECT_NAME}/values.yaml"
                                 } else {
                                     if (!SPLIT_DEV_AND_PROD) {
                                         values = "helm/javascript/services/${PROJECT_NAME}/values.yaml"

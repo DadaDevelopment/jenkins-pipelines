@@ -17,6 +17,8 @@ def call(Map config) {
     def OVERRIDE_VALUES =  config.get('values_override', '')
     def BUILDER_IMAGE = "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim"
     def infra = config.get("infra", false)
+    def INFRA_PROJECT = ((config.get('infraProject', 'example-project') ?: 'example-project') as String).trim()
+    def INFRA_ENV = ((config.get('infraEnv', 'prod') ?: 'prod') as String).trim()
     kubePodTemplate(
             builderProfile: 'python',
             builderImage: BUILDER_IMAGE,
@@ -199,7 +201,7 @@ def call(Map config) {
                                     values = OVERRIDE_VALUES
                                 }else {
                                     if (infra) {
-                                        values = "clusters/beget-prod/projects/example-project/environments/prod/apps/${PROJECT_NAME}/values.yaml"
+                                        values = "clusters/beget-prod/projects/${INFRA_PROJECT}/environments/${INFRA_ENV}/apps/${PROJECT_NAME}/values.yaml"
                                     } else {
                                         if (!SPLIT_DEV_AND_PROD) {
                                             values = "helm/python/services/${PROJECT_NAME}/values.yaml"
