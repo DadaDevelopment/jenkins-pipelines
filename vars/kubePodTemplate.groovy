@@ -60,6 +60,18 @@ metadata:
     app.kubernetes.io/managed-by: jenkins
 spec:
   priorityClassName: critical
+  # Resilience against cluster CoreDNS flaps (single-replica, overloaded):
+  # ndots:1 stops search-domain expansion storms for external names like
+  # nexus.dada-tuda.ru (otherwise 4+ queries x A/AAAA per lookup); attempts/timeout
+  # let a single getaddrinfo() ride out a brief CoreDNS blip instead of EAI_AGAIN.
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "1"
+      - name: attempts
+        value: "3"
+      - name: timeout
+        value: "2"
   securityContext:
     fsGroup: 1000
   volumes:

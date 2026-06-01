@@ -47,10 +47,13 @@ def call(Map config) {
                         runStage("Toolchain") {
                             sh '''
                                 set -eux
-                                python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
+                                # Survive transient cluster DNS flaps (overloaded single CoreDNS):
+                                # retry network ops with backoff that outlasts a CoreDNS restart window.
+                                retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
+                                retry python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 /tools/yq --version
-                                apt-get update
-                                apt-get install -y gcc python3-dev libpq-dev
+                                retry apt-get update
+                                retry apt-get install -y gcc python3-dev libpq-dev
                               '''
                             withEnv(["PATH=/tools:${env.PATH}"]) {
                                 sh '''
@@ -70,14 +73,15 @@ def call(Map config) {
                                 withCredentials([file(credentialsId: 'pip-nexus-settings', variable: 'PIP_SETTINGS')]) {
                                     sh """
                                         set -eux
+                                        retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
                                         python -m venv venv
                                         . venv/bin/activate
                                         export PIP_CONFIG_FILE='${PIP_SETTINGS}'
-                                        uv pip install --upgrade pip setuptools wheel
-                                        uv pip install -r requirements.txt
+                                        retry uv pip install --upgrade pip setuptools wheel
+                                        retry uv pip install -r requirements.txt
 
                                         if [ -f requirements-dev.txt ]; then
-                                            uv pip install -r requirements-dev.txt
+                                            retry uv pip install -r requirements-dev.txt
                                         fi
                                     """
                                 }
@@ -91,8 +95,9 @@ def call(Map config) {
                                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
                                     sh """
                                         set -eux
+                                        retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
                                         sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==${PYTHON_VER}.*\\"/" pyproject.toml || true
-                                        uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
+                                        retry uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}
                                         cp -f '${UV_SETTINGS}' ./uv.toml
                                     """
                                 }
@@ -104,6 +109,7 @@ def call(Map config) {
                         runStage("Test & Lint") {
                             sh """
                                 set -eux
+                                retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
                                 if [ -f ".venv/bin/activate" ]; then
                                     . .venv/bin/activate
                                 elif [ -f "venv/bin/activate" ]; then
@@ -123,7 +129,7 @@ def call(Map config) {
                                     echo "⚠️  No tests found — skipping pytest"
                                 else
                                     echo "✓ Tests detected — running pytest"
-                                    uv pip install pytest pytest-cov pytest-asyncio testcontainers
+                                    retry uv pip install pytest pytest-cov pytest-asyncio testcontainers
                                     uv run pytest --junitxml test-results.xml
                                 fi
                             """
@@ -163,6 +169,7 @@ def call(Map config) {
                                 script {
                                     sh """
                                         set -x
+                                        retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
                                         if [ -f ".venv/bin/activate" ]; then
                                             . .venv/bin/activate
                                         elif [ -f "venv/bin/activate" ]; then
@@ -171,10 +178,10 @@ def call(Map config) {
                                             echo "⚠️  No virtualenv (.venv or venv) found — cannot build"
                                             exit 1
                                         fi
-                                        uv pip install build
+                                        retry uv pip install build
                                         python -m build
                                         if [ -f uv.toml ]; then
-                                            uv sync --link-mode=copy --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
+                                            retry uv sync --link-mode=copy --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
                                         fi
                                     """
                                 }
@@ -184,8 +191,9 @@ def call(Map config) {
                                 runStage("PythonDeploy") {
                                     sh """
                                         set -eux
-                                        uv pip install twine
-                                        uv run twine upload -r nexus dist/* --config-file .pypirc
+                                        retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
+                                        retry uv pip install twine
+                                        retry uv run twine upload -r nexus dist/* --config-file .pypirc
                                     """
                                 }
                             }
