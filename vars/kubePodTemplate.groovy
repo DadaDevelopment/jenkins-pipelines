@@ -276,7 +276,7 @@ String _dockerContainers(String dockerCli, String dockerDind, Map storage) {
       resources:
         requests:
           cpu: "500m"
-          memory: "3Gi"
+          memory: "1Gi"
           ephemeral-storage: "${storage.dindEphemeralRequest}"
         limits:
           cpu: "2000m"
