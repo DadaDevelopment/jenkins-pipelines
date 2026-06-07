@@ -18,7 +18,12 @@ def call(Map config) {
     kubePodTemplate(
             builderProfile: 'maven',
             builderImage: BUILDER_IMAGE,
-            withDocker: true
+            withDocker: true,
+            // spring-boot:build-image pins Docker API v1.24; docker:29-dind requires
+            // >=1.40 and rejects it. Pin an older dind that still serves 1.24 (only
+            // affects spring builds; js/python use the modern docker:29-cli themselves).
+            dockerDindImage: 'docker:24-dind',
+            dockerCliImage: 'docker:24-cli'
     ) {
 
             stage('Checkout') {
