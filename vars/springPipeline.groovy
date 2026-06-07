@@ -17,7 +17,8 @@ def call(Map config) {
     def BUILDER_IMAGE = ((config.get('builderImage', "maven:3.9.9-eclipse-temurin-${JDK_IMAGE_VERSION}") ?: "maven:3.9.9-eclipse-temurin-${JDK_IMAGE_VERSION}") as String).trim()
     kubePodTemplate(
             builderProfile: 'maven',
-            builderImage: BUILDER_IMAGE
+            builderImage: BUILDER_IMAGE,
+            withDocker: true
     ) {
 
             stage('Checkout') {

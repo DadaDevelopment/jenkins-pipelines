@@ -175,9 +175,17 @@ String _dockerVolumes(String dockerGraphStorageSizeLimit) {
 String _builderEnv(String profile) {
     switch (profile) {
         case 'maven':
+            // DOCKER_HOST points spring-boot:build-image (run in THIS builder
+            // container) at the dind sidecar; without it the plugin probes the
+            // non-existent /var/run/docker.sock and fails. Harmless when the build
+            // does no image step. TLS disabled to match the dind (plain tcp:2375).
             return '''\
         - name: MAVEN_OPTS
           value: -Dmaven.repo.local=/root/.m2/repository/
+        - name: DOCKER_HOST
+          value: tcp://localhost:2375
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
         - name: PATH
           value: /usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'''
         case 'node':
@@ -299,11 +307,11 @@ Map _storageProfile(String profile, boolean withDocker) {
                     jnlpEphemeralLimit        : '512Mi',
                     builderEphemeralRequest   : '2Gi',
                     builderEphemeralLimit     : '4Gi',
-                    dockerEphemeralRequest    : '0Mi',
-                    dockerEphemeralLimit      : '0Mi',
-                    dindEphemeralRequest      : '0Mi',
-                    dindEphemeralLimit        : '0Mi',
-                    dockerGraphStorageSizeLimit: '4Gi',
+                    dockerEphemeralRequest    : withDocker ? '512Mi' : '0Mi',
+                    dockerEphemeralLimit      : withDocker ? '1Gi' : '0Mi',
+                    dindEphemeralRequest      : withDocker ? '2Gi' : '0Mi',
+                    dindEphemeralLimit        : withDocker ? '4Gi' : '0Mi',
+                    dockerGraphStorageSizeLimit: withDocker ? '8Gi' : '0Gi',
             ]
         case 'python':
             return [
