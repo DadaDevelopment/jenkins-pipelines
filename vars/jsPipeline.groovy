@@ -20,6 +20,7 @@ def call(Map config) {
     def SPLIT_DEV_AND_PROD = config.get('env-values', false)
     def DEPLOY_MODE = config.get('deploy', 'image')
     def deploy_build = DEPLOY_MODE == "image"
+    def deploy_npm_lib = DEPLOY_MODE == "npm-lib"
 
     def FAILURE_WEBHOOK_URL = ((config.get('failureWebhookUrl', '') ?: '') as String).trim()
     def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', '') ?: '') as String).trim()
@@ -364,6 +365,49 @@ def call(Map config) {
                 } else {
                     echo "Docker deploy skipped"
                 }
+
+                // ── npm-lib publish (deploy:'npm-lib') ──────────────────────
+                // Публикует npm-пакет в Nexus npm-hosted.
+                // Запускается только на main/master при merge-коммите.
+                // Credentials: docker-nexus-admin-psws (те же, что Docker).
+                if (!isPR() && deploy_npm_lib && (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master')) {
+                    container('builder') {
+                        runStage('Publish npm package') {
+                            withCredentials([
+                                usernamePassword(
+                                    credentialsId: 'docker-nexus-admin-psws',
+                                    usernameVariable: 'NPM_USER',
+                                    passwordVariable: 'NPM_PASS'
+                                )
+                            ]) {
+                                sh '''
+                                    set -eux
+                                    NPM_REGISTRY="https://nexus.dada-tuda.ru/repository/npm-hosted/"
+
+                                    # Получаем токен через npm login (legacy base64)
+                                    NPM_TOKEN=$(echo -n "${NPM_USER}:${NPM_PASS}" | base64)
+
+                                    # Настраиваем .npmrc с авторизацией для Nexus
+                                    echo "//nexus.dada-tuda.ru/repository/npm-hosted/:_auth=${NPM_TOKEN}" > .npmrc
+                                    echo "//nexus.dada-tuda.ru/repository/npm-hosted/:always-auth=true" >> .npmrc
+                                    echo "registry=https://nexus.dada-tuda.ru/repository/npm-hosted/" >> .npmrc
+
+                                    # Сборка пакета
+                                    if [ -f yarn.lock ]; then
+                                        yarn run build
+                                    else
+                                        npm run build
+                                    fi
+
+                                    # Публикация
+                                    npm publish --registry "${NPM_REGISTRY}"
+                                '''
+                            }
+                        }
+                    }
+                }
+                // ────────────────────────────────────────────────────────────
+
             } catch (err) {
                 currentBuild.result = 'FAILURE'
                 _maybeSendCiFailureWebhook(
