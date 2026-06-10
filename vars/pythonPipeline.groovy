@@ -11,8 +11,10 @@ def call(Map config) {
     def DEPLOY_MODE = config.get('deploy', 'image')
     def deploy_build = DEPLOY_MODE == "image"
     def deploy_package = DEPLOY_MODE == "dist"
-    def FAILURE_WEBHOOK_URL = ((config.get('failureWebhookUrl', '') ?: '') as String).trim()
-    def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', '') ?: '') as String).trim()
+    // CI-failure -> AgentSync autofix webhook is on by default for every python
+    // service; pass empty strings explicitly to opt a project out.
+    def FAILURE_WEBHOOK_URL = ((config.get('failureWebhookUrl', 'https://agent.dada-tuda.ru/v1/agentsync/events/ci-failed') ?: '') as String).trim()
+    def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', 'agentsync-ci-webhook-token') ?: '') as String).trim()
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
     def OVERRIDE_VALUES =  config.get('values_override', '')
     def BUILDER_IMAGE = "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim"
