@@ -156,6 +156,14 @@ String _cacheVolumes(String profile) {
     - name: uv-cache
       emptyDir:
         sizeLimit: 1Gi'''
+        case 'go':
+            return '''\
+    - name: go-mod-cache
+      emptyDir:
+        sizeLimit: 2Gi
+    - name: go-build-cache
+      emptyDir:
+        sizeLimit: 2Gi'''
         default:
             return ''
     }
@@ -208,6 +216,21 @@ String _builderEnv(String profile) {
           value: /tmp/.cache
         - name: PATH
           value: /home/jenkins/.local/bin:/usr/local/bin:/usr/bin:/bin'''
+        case 'go':
+            // GOPATH/GOMODCACHE/GOCACHE live under /tmp (HOME) so the non-root
+            // builder can write them; both caches are emptyDir-mounted. GOFLAGS
+            // keeps module mode explicit. golang image ships go at /usr/local/go.
+            return '''\
+        - name: GOPATH
+          value: /tmp/go
+        - name: GOMODCACHE
+          value: /tmp/go/pkg/mod
+        - name: GOCACHE
+          value: /tmp/.cache/go-build
+        - name: GOFLAGS
+          value: -mod=mod
+        - name: PATH
+          value: /tmp/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'''
         default:
             return ''
     }
@@ -235,6 +258,12 @@ String _builderMounts(String profile) {
           mountPath: /tmp/.cache/pip
         - name: uv-cache
           mountPath: /tmp/.cache/uv'''
+        case 'go':
+            return '''\
+        - name: go-mod-cache
+          mountPath: /tmp/go/pkg/mod
+        - name: go-build-cache
+          mountPath: /tmp/.cache/go-build'''
         default:
             return ''
     }
@@ -331,6 +360,18 @@ Map _storageProfile(String profile, boolean withDocker) {
                     jnlpEphemeralLimit        : '512Mi',
                     builderEphemeralRequest   : '4Gi',
                     builderEphemeralLimit     : '8Gi',
+                    dockerEphemeralRequest    : withDocker ? '512Mi' : '0Mi',
+                    dockerEphemeralLimit      : withDocker ? '1Gi' : '0Mi',
+                    dindEphemeralRequest      : withDocker ? '2Gi' : '0Mi',
+                    dindEphemeralLimit        : withDocker ? '4Gi' : '0Mi',
+                    dockerGraphStorageSizeLimit: withDocker ? '8Gi' : '0Gi',
+            ]
+        case 'go':
+            return [
+                    jnlpEphemeralRequest      : '256Mi',
+                    jnlpEphemeralLimit        : '512Mi',
+                    builderEphemeralRequest   : '3Gi',
+                    builderEphemeralLimit     : '6Gi',
                     dockerEphemeralRequest    : withDocker ? '512Mi' : '0Mi',
                     dockerEphemeralLimit      : withDocker ? '1Gi' : '0Mi',
                     dindEphemeralRequest      : withDocker ? '2Gi' : '0Mi',
