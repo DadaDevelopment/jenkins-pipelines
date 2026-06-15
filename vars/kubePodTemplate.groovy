@@ -324,7 +324,11 @@ String _dockerContainers(String dockerCli, String dockerDind, Map storage) {
       resources:
         requests:
           cpu: "500m"
-          memory: "1Gi"
+          # request is the scheduler reservation floor, not the build ceiling.
+          # idle dind daemon ~50-100Mi; the 4Gi limit absorbs image-build peaks.
+          # 1Gi reserved per agent starved node scheduling (cluster mem requests
+          # at 96-99%). Halved to 512Mi: builds still burst to the 4Gi limit.
+          memory: "512Mi"
           ephemeral-storage: "${storage.dindEphemeralRequest}"
         limits:
           cpu: "2000m"
