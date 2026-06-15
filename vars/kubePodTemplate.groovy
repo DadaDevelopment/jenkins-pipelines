@@ -41,7 +41,7 @@ String _buildYaml(String agentName, Map cfg) {
 
     if (!builderImg) error('kubePodTemplate: builderImage is required')
 
-    def cacheVols   = _cacheVolumes(profile)
+    def cacheVols   = _cacheVolumes(profile, cfg)
     def dockerVols  = withDocker ? "\n${_dockerVolumes(storage.dockerGraphStorageSizeLimit)}" : ''
     def builderEnv  = _builderEnv(profile)
     def builderMnts = _builderMounts(profile)
@@ -130,9 +130,20 @@ ${builderMnts}
 
 // ── Profile-specific volumes ───────────────────────────────────────────────────
 
-String _cacheVolumes(String profile) {
+String _cacheVolumes(String profile, Map cfg = [:]) {
     switch (profile) {
         case 'maven':
+            // Opt-in persistent .m2: with `mavenCacheClaim` set, mount a shared
+            // (RWX) PVC instead of a per-build emptyDir, so deps survive across
+            // builds (cold ~30m download -> warm minutes). Default stays emptyDir
+            // so builds that don't opt in are unaffected.
+            def mavenClaim = ((cfg.get('mavenCacheClaim', '') ?: '') as String).trim()
+            if (mavenClaim) {
+                return """\
+    - name: m2-cache
+      persistentVolumeClaim:
+        claimName: ${mavenClaim}"""
+            }
             return '''\
     - name: m2-cache
       emptyDir:

@@ -18,6 +18,10 @@ def call(Map config) {
     kubePodTemplate(
             builderProfile: 'maven',
             builderImage: BUILDER_IMAGE,
+            // Opt-in persistent Maven cache (shared RWX PVC). Repos pass
+            // mavenCacheClaim: 'jenkins-m2-cache' to skip the ~30m cold download;
+            // empty (default) keeps the per-build emptyDir.
+            mavenCacheClaim: ((config.get('mavenCacheClaim', '') ?: '') as String).trim(),
             withDocker: true,
             // spring-boot:build-image pins Docker API v1.24; docker:29-dind requires
             // >=1.40 and rejects it. Pin an older dind that still serves 1.24 (only
