@@ -25,6 +25,16 @@ def call(Map config) {
             builderProfile: 'python',
             builderImage: BUILDER_IMAGE,
             withDocker: true,
+            // docker:29-dind regression: dockerd's embedded BuildKit "session
+            // healthcheck" turns FATAL on "only one connection allowed" during a
+            // heavy build (observed deterministically on dada-agent at the 300+
+            // node-package apt step ~65s in) and the daemon self-shuts-down ->
+            // docker build dies -> pod Failed -> Jenkins ABORTED. NOT memory/eviction
+            // (dind exits 0 on graceful shutdown). Pin to docker:24, the only in-repo
+            // proven-good tag (spring runs it in prod); its dockerd does not fatally
+            // abort on this healthcheck. Match cli to dind to avoid API skew.
+            dockerDindImage: 'docker:24-dind',
+            dockerCliImage: 'docker:24-cli',
     ) {
 
             withEnv(["PATH=${env.HOME}/.local/bin:${env.PATH}"]) {
