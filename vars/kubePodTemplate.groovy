@@ -20,6 +20,13 @@ def call(Map config = [:], Closure body) {
             label: podLabel,
             namespace: (config.get('namespace', 'devops-tools') ?: 'devops-tools') as String,
             serviceAccount: (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
+            // WebSocket agent connection (over HTTPS/443) instead of the inbound TCP
+            // slaveAgentPort. The TCP channel was being dropped by the ingress/proxy
+            // ~2min into heavy build phases (uv sync / docker build) — controller saw
+            // ClosedChannelException, declared the agent offline and killed the pod,
+            // on any node, with NO resource exhaustion. WebSocket rides the same proxy
+            // as the UI and survives long-lived/bursty load.
+            websocket: true,
             yaml: yaml
     ) {
         node(podLabel) {
