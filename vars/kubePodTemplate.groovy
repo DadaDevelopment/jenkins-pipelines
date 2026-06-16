@@ -86,14 +86,19 @@ ${cacheVols}${dockerVols}
       image: jenkins/inbound-agent:latest
       tty: true
       workingDir: /home/jenkins/agent
+      # The agent JVM relays the build's log stream AND answers the controller's
+      # remoting ping. At cpu limit 300m it gets CPU-throttled during high-output
+      # phases (uv sync / docker build print hundreds of lines) and misses the
+      # heartbeat -> controller declares it offline (ClosedChannelException) and
+      # kills the pod ~2min in, on any node, with no OOM. 1 core keeps it responsive.
       resources:
         requests:
-          cpu: "50m"
-          memory: "128Mi"
+          cpu: "100m"
+          memory: "256Mi"
           ephemeral-storage: "${storage.jnlpEphemeralRequest}"
         limits:
-          cpu: "300m"
-          memory: "256Mi"
+          cpu: "1000m"
+          memory: "512Mi"
           ephemeral-storage: "${storage.jnlpEphemeralLimit}"
       volumeMounts:
         - name: workspace-volume
