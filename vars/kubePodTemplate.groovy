@@ -20,13 +20,6 @@ def call(Map config = [:], Closure body) {
             label: podLabel,
             namespace: (config.get('namespace', 'devops-tools') ?: 'devops-tools') as String,
             serviceAccount: (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
-            // WebSocket agent connection (over HTTPS/443) instead of the inbound TCP
-            // slaveAgentPort. The TCP channel was being dropped by the ingress/proxy
-            // ~2min into heavy build phases (uv sync / docker build) — controller saw
-            // ClosedChannelException, declared the agent offline and killed the pod,
-            // on any node, with NO resource exhaustion. WebSocket rides the same proxy
-            // as the UI and survives long-lived/bursty load.
-            websocket: true,
             yaml: yaml
     ) {
         node(podLabel) {
@@ -93,19 +86,14 @@ ${cacheVols}${dockerVols}
       image: jenkins/inbound-agent:latest
       tty: true
       workingDir: /home/jenkins/agent
-      # The agent JVM relays the build's log stream AND answers the controller's
-      # remoting ping. At cpu limit 300m it gets CPU-throttled during high-output
-      # phases (uv sync / docker build print hundreds of lines) and misses the
-      # heartbeat -> controller declares it offline (ClosedChannelException) and
-      # kills the pod ~2min in, on any node, with no OOM. 1 core keeps it responsive.
       resources:
         requests:
-          cpu: "100m"
-          memory: "256Mi"
+          cpu: "50m"
+          memory: "128Mi"
           ephemeral-storage: "${storage.jnlpEphemeralRequest}"
         limits:
-          cpu: "1000m"
-          memory: "512Mi"
+          cpu: "300m"
+          memory: "256Mi"
           ephemeral-storage: "${storage.jnlpEphemeralLimit}"
       volumeMounts:
         - name: workspace-volume
