@@ -22,9 +22,19 @@ def call(Map config = [:], Closure body) {
             serviceAccount: (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
             yaml: yaml
     ) {
-        node(podLabel) {
-            if (config.get('cleanWs', true)) cleanWs()
-            body()
+        // The in-cluster JNLP4 channel (agent -> jenkins svc:50000 over the Cilium
+        // service VIP) drops mid-build when the Beget-MANAGED control plane / apiserver
+        // flaps (observed: ClosedChannelException / "removed or offline" on builds that
+        // happen to run during a blip; a rerun on the SAME config passes). The flap is
+        // not ours to fix (cilium/apiserver are managed, not introspectable). So make the
+        // build SURVIVE it: retry ONLY on agent/channel loss -> a fresh pod is provisioned
+        // and the body re-runs. Real failures (compile/test/push) do NOT match agent() and
+        // are not retried, so a genuinely broken build still fails fast.
+        retry(count: 3, conditions: [agent()]) {
+            node(podLabel) {
+                if (config.get('cleanWs', true)) cleanWs()
+                body()
+            }
         }
     }
 }
@@ -35,8 +45,12 @@ String _buildYaml(String agentName, Map cfg) {
     def profile    = (cfg.get('builderProfile', 'node') as String).toLowerCase()
     def builderImg = cfg.get('builderImage', '') as String
     def withDocker = cfg.get('withDocker', false) as boolean
-    def dockerCli  = cfg.get('dockerCliImage', 'docker:29-cli') as String
-    def dockerDind = cfg.get('dockerDindImage', 'docker:29-dind') as String
+    // Default to docker:24, the ONLY in-repo-proven-good dind: docker:29-dind's embedded
+    // BuildKit "session" healthcheck fatally kills dockerd on heavy builds (dind exits 0,
+    // agent vanishes). spring/python already pin 24 explicitly; js/go relied on this default
+    // and were the last 29 holdouts. Override per-pipeline only for a deliberate bump.
+    def dockerCli  = cfg.get('dockerCliImage', 'docker:24-cli') as String
+    def dockerDind = cfg.get('dockerDindImage', 'docker:24-dind') as String
     def storage = _storageProfile(profile, withDocker)
 
     if (!builderImg) error('kubePodTemplate: builderImage is required')
@@ -83,7 +97,10 @@ ${cacheVols}${dockerVols}
       emptyDir: {}
   containers:
     - name: jnlp
-      image: jenkins/inbound-agent:latest
+      # Pinned by digest (was floating :latest). This is the exact image that handshakes
+      # cleanly against the 2.559-jdk21 controller; a floating tag silently changing the
+      # remoting version mid-incident is one variable too many. Bump deliberately.
+      image: jenkins/inbound-agent@sha256:65b16b388a32be41d95134a5be7ce58e20fbc4d862e12f021ae64bf83bd5fe7d
       tty: true
       workingDir: /home/jenkins/agent
       resources:
