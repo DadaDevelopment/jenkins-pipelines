@@ -113,11 +113,17 @@ ${builderEnv}
       resources:
         requests:
           cpu: "250m"
+          # request is the scheduler floor (keeps scheduling possible on the
+          # mem-request-saturated cluster); the limit is the real ceiling. uv sync
+          # --all-extras installing 200+ packages (scipy/numpy/matplotlib/botocore)
+          # peaks past 1536Mi and OOMKilled the builder (exit 137) at the link step —
+          # node MemoryPressure stays False since it's a per-container cgroup OOM, not
+          # node-level. Node has actual headroom (~50-75% used), so burst to 3Gi.
           memory: "512Mi"
           ephemeral-storage: "${storage.builderEphemeralRequest}"
         limits:
           cpu: "1500m"
-          memory: "1536Mi"
+          memory: "3072Mi"
           ephemeral-storage: "${storage.builderEphemeralLimit}"
       volumeMounts:
         - name: workspace-volume
