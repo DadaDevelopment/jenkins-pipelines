@@ -324,11 +324,15 @@ String _dockerContainers(String dockerCli, String dockerDind, Map storage) {
       resources:
         requests:
           cpu: "500m"
-          # request is the scheduler reservation floor, not the build ceiling.
-          # idle dind daemon ~50-100Mi; the 4Gi limit absorbs image-build peaks.
-          # 1Gi reserved per agent starved node scheduling (cluster mem requests
-          # at 96-99%). Halved to 512Mi: builds still burst to the 4Gi limit.
-          memory: "512Mi"
+          # Memory request is the kubelet EVICTION floor, not just a scheduler
+          # reservation: pods using MORE than their request are evicted first
+          # under transient node pressure. During docker build, dind burns
+          # ~800Mi-1Gi (apt/layer extraction). At a 512Mi request it was the top
+          # eviction victim mid-build -> agents vanished ("seems to be removed or
+          # offline", graceful SIGTERM, dind exit 0). Nodes are now 12Gi @ ~57%
+          # (the 96-99% over-commit that drove the 512Mi cut is gone), so restore
+          # 1Gi to cover real build usage and keep the agent eviction-resistant.
+          memory: "1Gi"
           ephemeral-storage: "${storage.dindEphemeralRequest}"
         limits:
           cpu: "2000m"
