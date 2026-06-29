@@ -6,7 +6,7 @@
 // marker. This is the single source of truth for that job — the Jenkins job
 // config is just:
 //
-//     @Library('jenkins-pipelines') _
+//     @Library('dada-tuda-jenkins-pipelines@develop') _
 //     dadaBuildPipeline()
 //
 // When the cloned repo ships a Dockerfile it wins. Otherwise this templates one
