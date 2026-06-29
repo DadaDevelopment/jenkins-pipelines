@@ -171,6 +171,9 @@ def renderDockerfile(String fw, Map d) {
             def sb = new StringBuilder()
             sb << "FROM node:20-bookworm\n"
             sb << "WORKDIR /app\n"
+            // corepack ships the pnpm/yarn shims with Node; the packageManager
+            // field / lockfile selects the actual PM. Harmless for npm.
+            sb << "RUN corepack enable\n"
             sb << "COPY . .\n"
             sb << "RUN ${install ?: 'npm install'}\n"
             if (build) { sb << "RUN ${build}\n" }
@@ -184,6 +187,7 @@ def renderDockerfile(String fw, Map d) {
         case ['react', 'vite', 'static']:
             return """FROM node:20-bookworm AS build
 WORKDIR /app
+RUN corepack enable
 COPY . .
 RUN ${install ?: 'npm install'}
 RUN ${build ?: 'npm run build'}
