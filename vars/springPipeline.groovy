@@ -38,11 +38,8 @@ def call(Map config) {
 
             container('builder') {
                 if (!isPR() && env.BRANCH_NAME == 'develop') {
-                    stage('Build && Test && SonarQube Analysis') {
-                        sonar("clean install verify sonar:sonar -Dmaven.repo.local=/root/.m2/repository/ -ntp -U " +
-                                "-Dsonar.projectKey=${config.sonarKey} " +
-                                "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml " +
-                                "-Dsonar.projectName=${PROJECT_NAME}")
+                    stage('Build && Test') {
+                        mvn("clean install verify -Dmaven.repo.local=/root/.m2/repository/ -ntp -U")
                     }
                 } else {
                     stage('Build && Test') {
