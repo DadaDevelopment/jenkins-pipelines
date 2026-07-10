@@ -307,19 +307,21 @@ def call(Map config) {
 
                             def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
                             def image = result.getName() + ':' + result.getTag()
+                            def cacheRef = result.getName() + ':buildcache-' + (env.BRANCH_NAME ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
-                            sh """
-                                set -eux
-                                docker version
-                                docker build -f ${dockerfile} -t ${image} ${DOCKER_CONTEXT}
-                            """
+                            dockerBuildxPush(
+                                    image: image,
+                                    cacheRef: cacheRef,
+                                    dockerfile: dockerfile,
+                                    context: DOCKER_CONTEXT
+                            )
+
                             def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
                             def branch = 'develop'
                             def authType = 'ssh'
                             def credentialsId = 'bitbucket-jenkins'
 
                             withCredentials([
-                                    usernamePassword(credentialsId: 'docker-nexus-admin-psws', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_LOGIN'),
                                     sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')
                             ]) {
                                 if (infra) {
@@ -344,13 +346,6 @@ def call(Map config) {
                                         "PATH=/tools:${env.PATH}",
                                         "GIT_SSH_COMMAND=${gitSshCmd}"
                                 ]) {
-                                    sh """
-                                        set -eux
-                                        echo "\${DOCKER_LOGIN}" | docker login nexus.dada-tuda.ru -u \${DOCKER_USERNAME} --password-stdin
-                                        docker push ${image}
-                                        docker rmi ${image} || true
-                                    """
-
                                     deployToArgo(repoUrl,
                                             values,
                                             result.getTag(),
