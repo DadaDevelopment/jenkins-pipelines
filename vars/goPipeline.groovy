@@ -132,16 +132,19 @@ def call(Map config) {
 
                             def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
                             def image = result.getName() + ':' + result.getTag()
+                            def cacheRef = result.getName() + ':buildcache-' + (env.BRANCH_NAME ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
-                            sh """
-                                set -eux
-                                docker version
-                                docker build \
-                                    --build-arg GO_VERSION=${GO_VER} \
-                                    --build-arg MAIN_PKG=${MAIN_PKG} \
-                                    --build-arg BIN_NAME=${BIN_NAME} \
-                                    -f ${dockerfile} -t ${image} ${DOCKER_CONTEXT}
-                            """
+                            dockerBuildxPush(
+                                    image: image,
+                                    cacheRef: cacheRef,
+                                    dockerfile: dockerfile,
+                                    context: DOCKER_CONTEXT,
+                                    buildArgs: [
+                                            "GO_VERSION=${GO_VER}",
+                                            "MAIN_PKG=${MAIN_PKG}",
+                                            "BIN_NAME=${BIN_NAME}",
+                                    ]
+                            )
 
                             def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
                             def branch = 'develop'
@@ -149,7 +152,6 @@ def call(Map config) {
                             def credentialsId = 'bitbucket-jenkins'
 
                             withCredentials([
-                                    usernamePassword(credentialsId: 'docker-nexus-admin-psws', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_LOGIN'),
                                     sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')
                             ]) {
                                 if (infra) {
@@ -174,13 +176,6 @@ def call(Map config) {
                                         "PATH=/tools:${env.PATH}",
                                         "GIT_SSH_COMMAND=${gitSshCmd}"
                                 ]) {
-                                    sh """
-                                        set -eux
-                                        echo "\${DOCKER_LOGIN}" | docker login nexus.dada-tuda.ru -u \${DOCKER_USERNAME} --password-stdin
-                                        docker push ${image}
-                                        docker rmi ${image} || true
-                                    """
-
                                     deployToArgo(repoUrl,
                                             values,
                                             result.getTag(),

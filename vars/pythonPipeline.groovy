@@ -245,12 +245,17 @@ def call(Map config) {
 
                                 def result = makeDockerImageInfo(PROJECT_NAME, 'dada', '1.0.0')
                                 def image = result.getName() + ':' + result.getTag()
+                                def cacheRef = result.getName() + ':buildcache-' + (env.BRANCH_NAME ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
-                                sh """
-                                    set -eux
-                                    docker version
-                                    docker build --build-arg PYTHON_VERSION=${PYTHON_VER} -f ${dockerfile} -t ${image} .
-                                """
+                                dockerBuildxPush(
+                                        image: image,
+                                        cacheRef: cacheRef,
+                                        dockerfile: dockerfile,
+                                        context: '.',
+                                        push: false,
+                                        buildArgs: ["PYTHON_VERSION=${PYTHON_VER}"]
+                                )
+
                                 def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
                                 def branch = 'develop'
                                 def authType = 'ssh'
