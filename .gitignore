@@ -1,3 +1,5 @@
 lib
 .idea
 jenkins-pipelines.iml
+# local MCP server config (contains auth token) — never commit
+.mcp.json
