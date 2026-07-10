@@ -39,7 +39,7 @@ def call(Map args) {
             'docker buildx build',
             baFlags,
             "--cache-from type=registry,ref=${cacheRef}",
-            "--cache-to type=registry,ref=${cacheRef},mode=max,image-manifest=true,oci-mediatypes=true",
+            "--cache-to type=registry,ref=${cacheRef},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true",
             "-f ${dockerfile}",
             "-t ${image}",
             "${outputFlag} ${context}",
