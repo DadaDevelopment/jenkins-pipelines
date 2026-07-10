@@ -69,10 +69,10 @@ def call(Map config) {
                             } else {
                                 values = "helm/spring/services/${PROJECT_NAME}/values-dev.yaml"
                             }
-                            repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
+                            repoUrl = 'https://bitbucket.dada-tuda.ru/scm/dada/dada-argo.git'
                             branch = 'develop'
-                            credentialsId = 'bitbucket-jenkins'
-                            authType = 'ssh'
+                            credentialsId = 'bitbucket-administrator-creds'
+                            authType = 'https'
                         }
 
                         def result = deployDockerImageToNexus("${PROJECT_NAME}-service",
