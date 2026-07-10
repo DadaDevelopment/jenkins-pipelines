@@ -107,6 +107,7 @@ spec:
                         env.TAG = (params.branch + '-b' + env.BUILD_NUMBER).replaceAll('[^A-Za-z0-9_.-]', '-')
                         env.IMG = 'nexus.dada-tuda.ru/' + env.PROJ + '/' + env.APP
                         env.CTX = 'src/' + (env.ROOTDIR ?: '.')
+                        env.CACHE_REF = env.IMG + ':buildcache-' + (params.branch ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
                         def dfPath = env.CTX + '/Dockerfile'
                         if (fileExists(dfPath)) {
@@ -129,10 +130,9 @@ spec:
                     }
                     container('docker') {
                         sh 'for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done'
-                        def cacheRef = env.IMG + ':buildcache-' + (params.branch ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
                         dockerBuildxPush(
                                 image: env.IMG + ':' + env.TAG,
-                                cacheRef: cacheRef,
+                                cacheRef: env.CACHE_REF,
                                 context: env.CTX
                         )
                     }
