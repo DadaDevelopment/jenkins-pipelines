@@ -139,7 +139,8 @@ spec:
                         )
                         sh """
                             set -e
-                            DIG=\$(grep -oE '"containerimage.digest":"sha256:[0-9a-f]{64}"' image-meta.json | grep -oE 'sha256:[0-9a-f]{64}' | head -1)
+                            echo '--- image-meta.json ---'; cat image-meta.json; echo '--- end ---'
+                            DIG=\$(tr -d '[:space:]' < image-meta.json | grep -oE '"containerimage.digest":"sha256:[0-9a-f]{64}"' | grep -oE 'sha256:[0-9a-f]{64}' | head -1)
                             test -n "\${DIG}"
                             echo "==> image: ${env.IMG}@\${DIG}"
                         """
