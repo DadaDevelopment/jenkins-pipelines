@@ -5,6 +5,8 @@ def call(Map config = [:], Closure body) {
             .replaceAll('[^A-Za-z0-9-]', '-').toLowerCase()
     def agentName = "kubeagent-${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}-${UUID.randomUUID().toString().take(6)}"
 
+    config.sharedCacheClaim = ((config.get('sharedCacheClaim', '') ?: '') as String).trim()
+
     String yaml
     if (config.containsKey('yamlTemplate')) {
         // Legacy path: raw template + vars map
@@ -154,6 +156,13 @@ ${builderMnts}
 // ── Profile-specific volumes ───────────────────────────────────────────────────
 
 String _cacheVolumes(String profile, Map cfg = [:]) {
+    def sharedClaim = ((cfg.get('sharedCacheClaim', '') ?: '') as String).trim()
+    if (sharedClaim && profile in ['maven', 'node', 'python', 'go']) {
+        return """\
+    - name: build-cache
+      persistentVolumeClaim:
+        claimName: ${sharedClaim}"""
+    }
     switch (profile) {
         case 'maven':
             // Opt-in persistent .m2: with `mavenCacheClaim` set, mount a shared
@@ -283,6 +292,45 @@ String _builderEnv(String profile) {
 // ── Profile-specific builder volume mounts ────────────────────────────────────
 
 String _builderMounts(String profile, Map cfg = [:]) {
+    def sharedClaim = ((cfg.get('sharedCacheClaim', '') ?: '') as String).trim()
+    if (sharedClaim) {
+        switch (profile) {
+            case 'maven':
+                return '''\
+        - name: build-cache
+          mountPath: /root/.m2/repository
+          subPath: m2'''
+            case 'node':
+                return '''\
+        - name: build-cache
+          mountPath: /tmp/.cache/npm
+          subPath: npm
+        - name: build-cache
+          mountPath: /tmp/.cache/yarn
+          subPath: yarn
+        - name: build-cache
+          mountPath: /tmp/.local/share/pnpm
+          subPath: pnpm'''
+            case 'python':
+                return '''\
+        - name: build-cache
+          mountPath: /tmp/.cache/pip
+          subPath: pip
+        - name: build-cache
+          mountPath: /tmp/.cache/uv
+          subPath: uv'''
+            case 'go':
+                return '''\
+        - name: build-cache
+          mountPath: /tmp/go/pkg/mod
+          subPath: go/mod
+        - name: build-cache
+          mountPath: /tmp/.cache/go-build
+          subPath: go/build'''
+            default:
+                return ''
+        }
+    }
     switch (profile) {
         case 'maven':
             return '''\
