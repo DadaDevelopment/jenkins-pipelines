@@ -136,6 +136,11 @@ spec:
                                 dockerfile: env.CTX + '/Dockerfile',
                                 context: env.CTX
                         )
+                        sh """
+                            set -e
+                            DIG=\$(docker buildx imagetools inspect ${env.IMG}:${env.TAG} --format '{{.Manifest.Digest}}')
+                            echo "==> image: ${env.IMG}@\${DIG}"
+                        """
                     }
                 }
             }
