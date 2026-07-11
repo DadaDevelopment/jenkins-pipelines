@@ -58,7 +58,7 @@ String _buildYaml(String agentName, Map cfg) {
     def cacheVols   = _cacheVolumes(profile, cfg)
     def dockerVols  = withDocker ? "\n${_dockerVolumes(storage.dockerGraphStorageSizeLimit)}" : ''
     def builderEnv  = _builderEnv(profile)
-    def builderMnts = _builderMounts(profile)
+    def builderMnts = _builderMounts(profile, cfg)
     def dockerCtrs  = withDocker ? "\n\n${_dockerContainers(dockerCli, dockerDind, storage)}" : ''
 
     """\
@@ -191,6 +191,16 @@ String _cacheVolumes(String profile, Map cfg = [:]) {
       emptyDir:
         sizeLimit: 1Gi'''
         case 'go':
+            def goClaim = ((cfg.get('goCacheClaim', '') ?: '') as String).trim()
+            if (goClaim) {
+                return """\
+    - name: go-mod-cache
+      persistentVolumeClaim:
+        claimName: ${goClaim}
+    - name: go-build-cache
+      persistentVolumeClaim:
+        claimName: ${goClaim}"""
+            }
             return '''\
     - name: go-mod-cache
       emptyDir:
@@ -272,7 +282,7 @@ String _builderEnv(String profile) {
 
 // ── Profile-specific builder volume mounts ────────────────────────────────────
 
-String _builderMounts(String profile) {
+String _builderMounts(String profile, Map cfg = [:]) {
     switch (profile) {
         case 'maven':
             return '''\
@@ -293,6 +303,16 @@ String _builderMounts(String profile) {
         - name: uv-cache
           mountPath: /tmp/.cache/uv'''
         case 'go':
+            def goClaim = ((cfg.get('goCacheClaim', '') ?: '') as String).trim()
+            if (goClaim) {
+                return '''\
+        - name: go-mod-cache
+          mountPath: /tmp/go/pkg/mod
+          subPath: mod
+        - name: go-build-cache
+          mountPath: /tmp/.cache/go-build
+          subPath: build'''
+            }
             return '''\
         - name: go-mod-cache
           mountPath: /tmp/go/pkg/mod

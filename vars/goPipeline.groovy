@@ -43,6 +43,7 @@ def call(Map config) {
             builderProfile: 'go',
             builderImage: BUILDER_IMAGE,
             withDocker: true,
+            goCacheClaim: ((config.get('goCacheClaim', '') ?: '') as String).trim(),
     ) {
 
             def runStage = { String stageName, Closure body ->
