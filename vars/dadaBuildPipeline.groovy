@@ -139,12 +139,13 @@ spec:
                         )
                         sh """
                             set -e
-                            echo '--- image-meta.json ---'; cat image-meta.json; echo '--- end ---'
                             DIG=\$(tr -d '[:space:]' < image-meta.json | grep -oE '"containerimage.digest":"sha256:[0-9a-f]{64}"' | grep -oE 'sha256:[0-9a-f]{64}' | head -1)
                             test -n "\${DIG}"
                             echo "==> image: ${env.IMG}@\${DIG}"
                         """
                     }
+                    sleep time: 5, unit: 'SECONDS'
+                    echo "build & push complete for ${env.IMG}:${env.TAG}"
                 }
             }
         }
