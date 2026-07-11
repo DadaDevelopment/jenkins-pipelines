@@ -133,6 +133,7 @@ spec:
                         dockerBuildxPush(
                                 image: env.IMG + ':' + env.TAG,
                                 cacheRef: env.CACHE_REF,
+                                dockerfile: env.CTX + '/Dockerfile',
                                 context: env.CTX
                         )
                     }
