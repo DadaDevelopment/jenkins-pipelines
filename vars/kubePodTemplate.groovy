@@ -5,7 +5,7 @@ def call(Map config = [:], Closure body) {
             .replaceAll('[^A-Za-z0-9-]', '-').toLowerCase()
     def agentName = "kubeagent-${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}-${UUID.randomUUID().toString().take(6)}"
 
-    config.sharedCacheClaim = ((config.get('sharedCacheClaim', '') ?: '') as String).trim()
+    config.sharedCacheClaim = ((config.get('sharedCacheClaim', 'jenkins-build-cache') ?: 'jenkins-build-cache') as String).trim()
 
     String yaml
     if (config.containsKey('yamlTemplate')) {
