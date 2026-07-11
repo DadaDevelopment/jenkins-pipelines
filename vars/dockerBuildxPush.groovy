@@ -31,9 +31,11 @@ def call(Map args) {
     String credId     = (args.get('credentialsId', 'docker-nexus-admin-psws') ?: 'docker-nexus-admin-psws') as String
     List   buildArgs  = (args.get('buildArgs', []) ?: []) as List
     boolean push      = (args.get('push', true)) as boolean
+    String metaFile   = (args.get('metadataFile', '') ?: '') as String
 
     String baFlags = buildArgs.collect { "--build-arg ${it}" }.join(' ')
     String outputFlag = push ? '--push' : '--load'
+    String metaFlag = metaFile ? "--metadata-file ${metaFile}" : ''
 
     String buildxCmd = [
             'docker buildx build',
@@ -42,6 +44,7 @@ def call(Map args) {
             "--cache-to type=registry,ref=${cacheRef},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true",
             "-f ${dockerfile}",
             "-t ${image}",
+            metaFlag,
             "${outputFlag} ${context}",
     ].findAll { it }.join(' ')
 

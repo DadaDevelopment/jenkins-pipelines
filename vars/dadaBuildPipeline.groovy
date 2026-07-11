@@ -134,11 +134,13 @@ spec:
                                 image: env.IMG + ':' + env.TAG,
                                 cacheRef: env.CACHE_REF,
                                 dockerfile: env.CTX + '/Dockerfile',
-                                context: env.CTX
+                                context: env.CTX,
+                                metadataFile: 'image-meta.json'
                         )
                         sh """
                             set -e
-                            DIG=\$(docker buildx imagetools inspect ${env.IMG}:${env.TAG} --format '{{.Manifest.Digest}}')
+                            DIG=\$(grep -oE '"containerimage.digest":"sha256:[0-9a-f]{64}"' image-meta.json | grep -oE 'sha256:[0-9a-f]{64}' | head -1)
+                            test -n "\${DIG}"
                             echo "==> image: ${env.IMG}@\${DIG}"
                         """
                     }
