@@ -76,6 +76,7 @@ String _stablePodLabel(String profile, String shapeSource, String agentName, Map
 
 String _buildYaml(String agentName, Map cfg) {
     def profile    = (cfg.get('builderProfile', 'node') as String).toLowerCase()
+    if (profile == 'multi') return _buildMultiYaml(agentName, cfg)
     def builderImg = cfg.get('builderImage', '') as String
     def withDocker = cfg.get('withDocker', false) as boolean
     // Default to docker:24, the ONLY in-repo-proven-good dind: docker:29-dind's embedded
@@ -181,6 +182,117 @@ ${builderEnv}
 ${builderMnts}
         - name: tools-volume
           mountPath: /tools${dockerCtrs}
+"""
+}
+
+// ── Multi-tool warm pod ────────────────────────────────────────────────────────
+// One fat pod that keeps every toolchain container resident (go/node/python/maven
+// + dind) so a build only switches container('<tool>') instead of re-provisioning
+// a pod when the build type changes. Idle tool containers run `cat` and reserve
+// dust-sized requests; only the active tool (one at a time) + dind burn real
+// resources, so peak cost is ~one normal builder pod. Pair with idleMinutes for
+// warm reuse across build types on the same slot. Requires the shared build-cache
+// PVC (sharedCacheClaim) which every tool mounts at its own cache subPath.
+String _buildMultiYaml(String agentName, Map cfg) {
+    def storage = _storageProfile('multi', true)
+    def dockerCli  = cfg.get('dockerCliImage', 'docker:24-cli') as String
+    def dockerDind = cfg.get('dockerDindImage', 'docker:24-dind') as String
+    def claim = ((cfg.get('sharedCacheClaim', 'jenkins-build-cache') ?: 'jenkins-build-cache') as String).trim()
+    if (!claim) error('kubePodTemplate: builderProfile multi requires sharedCacheClaim')
+
+    def toolCfg = cfg + [sharedCacheClaim: claim]
+    def tools = [
+            [name: 'go',     image: (cfg.get('goImage', 'golang:1.25-alpine') as String),                 profile: 'go'],
+            [name: 'node',   image: (cfg.get('nodeImage', 'node:20-bookworm') as String),                 profile: 'node'],
+            [name: 'python', image: (cfg.get('pythonImage', 'python:3.12-slim') as String),               profile: 'python'],
+            [name: 'maven',  image: (cfg.get('mavenImage', 'maven:3.9.9-eclipse-temurin-21') as String),  profile: 'maven'],
+    ]
+
+    def toolCtrs = tools.collect { t ->
+        """
+    - name: ${t.name}
+      image: ${t.image}
+      command: ['cat']
+      tty: true
+      workingDir: /home/jenkins/agent
+      env:
+        - name: HOME
+          value: /tmp
+${_builderEnv(t.profile)}
+      resources:
+        requests:
+          cpu: "25m"
+          memory: "64Mi"
+        limits:
+          cpu: "1500m"
+          memory: "2Gi"
+      volumeMounts:
+        - name: workspace-volume
+          mountPath: /home/jenkins/agent
+${_builderMounts(t.profile, toolCfg)}
+        - name: tools-volume
+          mountPath: /tools"""
+    }.join('')
+
+    def dockerCtrs = "\n\n${_dockerContainers(dockerCli, dockerDind, storage)}"
+
+    """\
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${agentName}
+  annotations:
+    argocd.argoproj.io/tracking-id: jenkins-beget:/Pod:devops-tools/${agentName}
+  labels:
+    app.kubernetes.io/name: jenkins-agent
+    app.kubernetes.io/part-of: jenkins-common
+    app.kubernetes.io/managed-by: jenkins
+spec:
+  priorityClassName: critical
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "1"
+      - name: attempts
+        value: "3"
+      - name: timeout
+        value: "2"
+  securityContext:
+    fsGroup: 1000
+  volumes:
+    - name: workspace-volume
+      emptyDir:
+        sizeLimit: 8Gi
+    - name: build-cache
+      persistentVolumeClaim:
+        claimName: ${claim}
+    - name: docker-graph-storage
+      emptyDir:
+        sizeLimit: ${storage.dockerGraphStorageSizeLimit}
+    - name: docker-certs
+      emptyDir: {}
+    - name: tools-volume
+      emptyDir: {}
+  containers:
+    - name: jnlp
+      image: jenkins/inbound-agent@sha256:65b16b388a32be41d95134a5be7ce58e20fbc4d862e12f021ae64bf83bd5fe7d
+      tty: true
+      workingDir: /home/jenkins/agent
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "128Mi"
+          ephemeral-storage: "${storage.jnlpEphemeralRequest}"
+        limits:
+          cpu: "300m"
+          memory: "256Mi"
+          ephemeral-storage: "${storage.jnlpEphemeralLimit}"
+      volumeMounts:
+        - name: workspace-volume
+          mountPath: /home/jenkins/agent
+        - name: tools-volume
+          mountPath: /tools
+${toolCtrs}${dockerCtrs}
 """
 }
 
