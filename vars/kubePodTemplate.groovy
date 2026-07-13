@@ -266,6 +266,9 @@ spec:
     - name: build-cache
       persistentVolumeClaim:
         claimName: ${claim}
+    - name: m2-cache
+      emptyDir:
+        sizeLimit: 2Gi
     - name: docker-graph-storage
       emptyDir:
         sizeLimit: ${storage.dockerGraphStorageSizeLimit}
@@ -300,7 +303,7 @@ ${toolCtrs}${dockerCtrs}
 
 String _cacheVolumes(String profile, Map cfg = [:]) {
     def sharedClaim = ((cfg.get('sharedCacheClaim', '') ?: '') as String).trim()
-    if (sharedClaim && profile in ['maven', 'node', 'python', 'go']) {
+    if (sharedClaim && profile in ['node', 'python', 'go']) {
         return """\
     - name: build-cache
       persistentVolumeClaim:
@@ -436,13 +439,8 @@ String _builderEnv(String profile) {
 
 String _builderMounts(String profile, Map cfg = [:]) {
     def sharedClaim = ((cfg.get('sharedCacheClaim', '') ?: '') as String).trim()
-    if (sharedClaim) {
+    if (sharedClaim && profile != 'maven') {
         switch (profile) {
-            case 'maven':
-                return '''\
-        - name: build-cache
-          mountPath: /root/.m2/repository
-          subPath: m2'''
             case 'node':
                 return '''\
         - name: build-cache
