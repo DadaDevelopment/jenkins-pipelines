@@ -1,20 +1,27 @@
 import groovy.text.SimpleTemplateEngine
 
 def call(Map config = [:], Closure body) {
-    def podLabel = "kubeagent-${env.JOB_BASE_NAME ?: 'job'}-${env.BUILD_NUMBER ?: 'manual'}"
-            .replaceAll('[^A-Za-z0-9-]', '-').toLowerCase()
     def agentName = "kubeagent-${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}-${UUID.randomUUID().toString().take(6)}"
 
     config.sharedCacheClaim = ((config.get('sharedCacheClaim', 'jenkins-build-cache') ?: 'jenkins-build-cache') as String).trim()
 
     String yaml
-    if (config.containsKey('yamlTemplate')) {
-        // Legacy path: raw template + vars map
+    boolean legacy = config.containsKey('yamlTemplate')
+    if (legacy) {
+        // Legacy path: raw template + vars map. podLabel is derived below and fed
+        // back in so callers that reference ${podLabel} still resolve.
+        yaml = agentName
+    } else {
+        yaml = _buildYaml(agentName, config)
+    }
+
+    def profile = (config.get('builderProfile', 'job') as String).toLowerCase().replaceAll('[^a-z0-9]', '')
+    def podLabel = _stablePodLabel(profile, legacy ? (config.yamlTemplate as String) : yaml, agentName, config)
+
+    if (legacy) {
         def vars = [agentName: agentName, podLabel: podLabel]
         vars.putAll((config.get('yamlVars', [:]) ?: [:]) as Map)
         yaml = new SimpleTemplateEngine().createTemplate(config.yamlTemplate as String).make(vars).toString()
-    } else {
-        yaml = _buildYaml(agentName, config)
     }
 
     podTemplate(
@@ -22,6 +29,12 @@ def call(Map config = [:], Closure body) {
             label: podLabel,
             namespace: (config.get('namespace', 'devops-tools') ?: 'devops-tools') as String,
             serviceAccount: (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
+            // Warm-reuse: idle agents of THIS shape stay online idleMinutes so the
+            // next same-shape build reuses the pod (warm dind graph + local caches)
+            // instead of cold-starting. podRetention onFailure keeps failed pods for
+            // debug; never() would delete on completion and defeat reuse.
+            idleMinutes: (config.get('idleMinutes', 20) as Integer),
+            podRetention: onFailure(),
             yaml: yaml
     ) {
         // The in-cluster JNLP4 channel (agent -> jenkins svc:50000 over the Cilium
@@ -39,6 +52,24 @@ def call(Map config = [:], Closure body) {
             }
         }
     }
+}
+
+// ── Stable pod label (warm-reuse) ──────────────────────────────────────────────
+// The k8s plugin reuses an idle agent only when the next build asks for the same
+// template label. A per-build label => every build cold-starts. Derive the label
+// from the pod SHAPE (rendered yaml with the unique agent name neutralised, plus
+// the podTemplate-level knobs that are not in the yaml) so identical shapes share
+// one label and reuse warm pods, while any shape change forces a distinct label
+// (never reuse a differently-toolchained pod).
+String _stablePodLabel(String profile, String shapeSource, String agentName, Map config) {
+    def shape = (shapeSource ?: '').replace(agentName ?: '', 'AGENT')
+    shape += "|cloud=${config.get('cloud', 'self-managed')}" +
+             "|ns=${config.get('namespace', 'devops-tools')}" +
+             "|sa=${config.get('serviceAccount', 'jenkins-admin')}" +
+             "|vars=${config.get('yamlVars', [:])}"
+    def md = java.security.MessageDigest.getInstance('SHA-256')
+    def hash = md.digest(shape.getBytes('UTF-8')).encodeHex().toString().take(10)
+    return "build-${profile}-${hash}".replaceAll('[^A-Za-z0-9-]', '-').toLowerCase()
 }
 
 // ── YAML builder ───────────────────────────────────────────────────────────────
