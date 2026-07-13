@@ -29,12 +29,14 @@ def call(Map config = [:], Closure body) {
             label: podLabel,
             namespace: (config.get('namespace', 'devops-tools') ?: 'devops-tools') as String,
             serviceAccount: (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
-            // Warm-reuse: idle agents of THIS shape stay online idleMinutes so the
-            // next same-shape build reuses the pod (warm dind graph + local caches)
-            // instead of cold-starting. podRetention onFailure keeps failed pods for
-            // debug; never() would delete on completion and defeat reuse.
-            idleMinutes: (config.get('idleMinutes', 20) as Integer),
-            podRetention: onFailure(),
+            // NO idleMinutes: this cluster runs at 85-95% memory requests (limits
+            // 190-243% over-committed), so holding idle warm agents starves new
+            // heavy build pods -> FailedScheduling "Insufficient memory" and 7-min
+            // scheduling waits (worse than the ~2-min cold start it tried to save).
+            // Warm-reuse via held pods is incompatible with a memory-saturated
+            // cluster; the stable label above is kept (inert, free) so reuse can be
+            // re-enabled per pipeline via idleMinutes if capacity is ever added.
+            idleMinutes: (config.get('idleMinutes', 0) as Integer),
             yaml: yaml
     ) {
         // The in-cluster JNLP4 channel (agent -> jenkins svc:50000 over the Cilium

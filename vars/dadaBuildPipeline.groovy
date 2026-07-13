@@ -21,7 +21,6 @@ def call(Map config = [:]) {
                 cloud 'self-managed'
                 defaultContainer 'jnlp'
                 label 'dada-build-agent'
-                idleMinutes 20
                 yaml """
 apiVersion: v1
 kind: Pod
