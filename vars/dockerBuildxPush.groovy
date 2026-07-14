@@ -59,7 +59,15 @@ def call(Map args) {
             docker buildx use jenkins
 
             T0=\$(date +%s)
-            ${buildxCmd}
+            attempt=1; max=3
+            until ${buildxCmd}; do
+                if [ \$attempt -ge \$max ]; then
+                    echo "dockerBuildxPush: build+push failed after \$attempt attempts" >&2
+                    exit 1
+                fi
+                echo "[push-retry \$attempt/\$((max-1))] buildx build+push failed (often a transient nexus registry 'digest mismatch' on a large layer); retrying in 10s..." >&2
+                attempt=\$((attempt+1)); sleep 10
+            done
             echo "BUILD_SECONDS=\$(( \$(date +%s) - T0 ))"
         """
     }
