@@ -187,7 +187,12 @@ def renderDockerfile(String fw, Map d) {
             sb << "ENV NODE_ENV=production\n"
             sb << "ENV PORT=${p}\n"
             sb << "EXPOSE ${p}\n"
-            sb << "CMD ${start ?: 'npm start'}\n"
+            if (fw == 'nextjs') {
+                sb << "RUN npm i -g serve@14\n"
+                sb << "CMD [\"sh\",\"-c\",\"if [ -d out ]; then exec serve -s out -l tcp://0.0.0.0:${p}; else exec ${start ?: 'npm start'}; fi\"]\n"
+            } else {
+                sb << "CMD ${start ?: 'npm start'}\n"
+            }
             return sb.toString()
 
         // Static / SPA: build, then serve the output dir with nginx.
