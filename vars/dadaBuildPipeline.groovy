@@ -197,6 +197,7 @@ def renderDockerfile(String fw, Map d) {
 
         // Static / SPA: build, then serve the output dir with nginx.
         case ['react', 'vite', 'static']:
+            int p = port ?: 80
             return """FROM node:20-bookworm AS build
 WORKDIR /app
 RUN corepack enable
@@ -205,7 +206,8 @@ RUN ${install ?: 'npm install'}
 RUN ${build ?: 'npm run build'}
 FROM nginx:alpine
 COPY --from=build /app/${output} /usr/share/nginx/html
-EXPOSE 80
+RUN printf 'server {\\n    listen ${p};\\n    location / {\\n        root /usr/share/nginx/html;\\n        try_files \$uri \$uri/ /index.html;\\n    }\\n}\\n' > /etc/nginx/conf.d/default.conf
+EXPOSE ${p}
 """
 
         case ['fastapi', 'django', 'flask', 'python']:
