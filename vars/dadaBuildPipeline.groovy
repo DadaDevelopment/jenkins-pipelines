@@ -53,6 +53,7 @@ spec:
         options { timeout(time: 20, unit: 'MINUTES'); disableConcurrentBuilds() }
         parameters {
             string(name: 'repo',               defaultValue: '',      description: 'authenticated clone URL (sent by build-agent)')
+            string(name: 'archive_url',        defaultValue: '',      description: 'presigned GET URL for an uploaded source archive (zip/tar.gz); when set this wins over repo/branch clone')
             string(name: 'branch',             defaultValue: 'main',  description: 'git branch')
             string(name: 'framework',          defaultValue: 'auto',  description: 'auto|web|android (build family)')
             string(name: 'buildType',          defaultValue: 'debug', description: 'reserved (android signing)')
@@ -99,7 +100,48 @@ spec:
             }
             stage('clone') {
                 steps {
-                    sh 'set -e; rm -rf src; git clone --depth 1 --branch "$branch" "$repo" src'
+                    script {
+                        if (params.archive_url?.trim()) {
+                            sh '''
+                                set -e
+                                rm -rf src src.bin
+                                curl -fsSL "$archive_url" -o src.bin
+                                mkdir -p src
+                                MAGIC=$(head -c 4 src.bin | od -An -tx1 | tr -d ' \\n')
+                                case "$MAGIC" in
+                                    504b0304)
+                                        unzip -q src.bin -d src/
+                                        ;;
+                                    1f8b*)
+                                        tar -xzf src.bin -C src/
+                                        ;;
+                                    *)
+                                        echo "unsupported archive format (magic bytes: $MAGIC)" >&2
+                                        exit 1
+                                        ;;
+                                esac
+                                rm -f src.bin
+                                ESCAPED=$(find src/ -path '*..*' | head -1)
+                                if [ -n "$ESCAPED" ]; then
+                                    echo "zip-slip guard: entry escapes src/: $ESCAPED" >&2
+                                    exit 1
+                                fi
+                                ENTRY_COUNT=$(find src -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
+                                if [ "$ENTRY_COUNT" = "1" ]; then
+                                    ONLY_ENTRY=$(find src -mindepth 1 -maxdepth 1)
+                                    if [ -d "$ONLY_ENTRY" ]; then
+                                        TMPDIR=$(mktemp -d)
+                                        find "$ONLY_ENTRY" -mindepth 1 -maxdepth 1 -exec mv {} "$TMPDIR"/ \\;
+                                        rmdir "$ONLY_ENTRY"
+                                        find "$TMPDIR" -mindepth 1 -maxdepth 1 -exec mv {} src/ \\;
+                                        rmdir "$TMPDIR"
+                                    fi
+                                fi
+                            '''
+                        } else {
+                            sh 'set -e; rm -rf src; git clone --depth 1 --branch "$branch" "$repo" src'
+                        }
+                    }
                 }
             }
             stage('build & push') {
