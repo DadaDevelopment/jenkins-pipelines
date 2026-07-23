@@ -110,7 +110,11 @@ spec:
                                 MAGIC=$(head -c 4 src.bin | od -An -tx1 | tr -d ' \\n')
                                 case "$MAGIC" in
                                     504b0304)
-                                        unzip -q src.bin -d src/
+                                        if command -v unzip >/dev/null 2>&1; then
+                                            unzip -q src.bin -d src/
+                                        else
+                                            ( cd src && jar -xf ../src.bin )
+                                        fi
                                         ;;
                                     1f8b*)
                                         tar -xzf src.bin -C src/
