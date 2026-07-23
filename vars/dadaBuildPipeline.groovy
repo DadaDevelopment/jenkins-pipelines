@@ -156,8 +156,10 @@ spec:
                         env.CTX = 'src/' + (env.ROOTDIR ?: '.')
                         env.CACHE_REF = env.IMG + ':buildcache-' + (params.branch ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
-                        def dfPath = env.CTX + '/Dockerfile'
-                        if (fileExists(dfPath)) {
+                        def dfName = ['Dockerfile', 'dockerfile'].find { fileExists(env.CTX + '/' + it) }
+                        def dfPath = env.CTX + '/' + (dfName ?: 'Dockerfile')
+                        env.DOCKERFILE_PATH = dfPath
+                        if (dfName) {
                             echo "using repo Dockerfile at ${dfPath}"
                         } else {
                             def fw = (params.detected_framework ?: '').trim()
@@ -180,7 +182,7 @@ spec:
                         dockerBuildxPush(
                                 image: env.IMG + ':' + env.TAG,
                                 cacheRef: env.CACHE_REF,
-                                dockerfile: env.CTX + '/Dockerfile',
+                                dockerfile: env.DOCKERFILE_PATH,
                                 context: env.CTX,
                                 metadataFile: 'image-meta.json'
                         )
