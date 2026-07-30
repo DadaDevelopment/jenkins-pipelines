@@ -260,13 +260,16 @@ EXPOSE ${p}
 
         case ['fastapi', 'django', 'flask', 'python']:
             int p = port ?: 8000
+            String pyInstall = install ?: 'if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; elif [ -f setup.py ]; then pip install --no-cache-dir -e .; else echo "no python manifest - skipping install"; fi'
+            String pyStart = start ?: 'for f in main.py bot.py app.py; do [ -f "$f" ] && exec python "$f"; done; f=$(ls *.py 2>/dev/null | head -1); [ -n "$f" ] && exec python "$f"; echo "no python entrypoint found (looked for main.py, bot.py, app.py, then any *.py)" >&2; exit 1'
             return """FROM python:3.12-slim
 WORKDIR /app
 COPY . .
-RUN ${install ?: 'pip install --no-cache-dir -r requirements.txt'}
+RUN ${pyInstall}
 ENV PORT=${p}
+ENV PYTHONUNBUFFERED=1
 EXPOSE ${p}
-CMD ${start ?: 'python app.py'}
+CMD ["sh","-c","${pyStart.replace('\\', '\\\\').replace('"', '\\"')}"]
 """
 
         case 'go':
