@@ -28,6 +28,9 @@ def call(Map config) {
     def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', 'agentsync-ci-webhook-token') ?: '') as String).trim()
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
 
+    def CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID = ((config.get('consoleDeployTokenCredentialId', '') ?: '') as String).trim()
+    def CONSOLE_URL = ((config.get('consoleUrl', 'https://console.dada-tuda.ru') ?: 'https://console.dada-tuda.ru') as String).trim()
+
     def BUILDER_IMAGE = ((config.get('builderImage', 'node:20-bookworm') ?: 'node:20-bookworm') as String).trim()
 
     def OPENAPI_BASE_URL = ((config.get('openapiBaseUrl', 'https://profi-backend.dada-tuda.ru') ?: '') as String).trim()
@@ -356,6 +359,14 @@ def call(Map config) {
                                             authType
                                     )
                                 }
+                            }
+
+                            if (CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID != '') {
+                                dadaConsoleDeploy(
+                                        image: image,
+                                        tokenCredentialsId: CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID,
+                                        consoleUrl: CONSOLE_URL,
+                                )
                             }
                         }
                     }
