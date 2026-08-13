@@ -13,12 +13,16 @@
  * that edits the gitops compose by hand leaves the console believing whatever it
  * last saw. fin-core/findata drifted 104 backend builds that way.
  *
- * The calls run in the `jnlp` container on purpose. Pipelines reach this step from
- * inside a toolchain container, and those images carry no HTTP client: the
- * `docker:24-cli` image has only busybox wget and the uv builder image has
- * neither, so a release died with `curl: not found` after the image was already
- * pushed. `jenkins/inbound-agent` ships curl and exists in every pod template
- * here, and the workspace is the same volume in every container.
+ * The HTTP client is whatever the current container has. Toolchain images differ:
+ * `docker:24-cli` carries only busybox wget and the uv builder image carries
+ * neither, which killed a release with `curl: not found` after the image was
+ * already pushed. Switching into the `jnlp` container is NOT the fix -- a step
+ * running there fights the agent process itself and the pod died mid-poll. So the
+ * script probes for curl, falls back to busybox wget, and fails loudly when the
+ * container has no client at all. Its `http` helper takes a body file, a URL and
+ * an optional request-body file (which makes it a POST) and echoes the HTTP
+ * status; under wget the status is read back out of the `-S` header dump, since
+ * busybox wget writes no body and exits non-zero on 4xx/5xx.
  *
  * The token is a per-app deploy hook (minted at
  * POST /api/v1/projects/{p}/environments/{e}/apps/{a}/deploy-hooks) held as a
@@ -35,7 +39,6 @@
  * @param args.consoleUrl          console base URL (default 'https://console.dada-tuda.ru')
  * @param args.timeoutSeconds      how long to wait for a terminal operation (default 900)
  * @param args.pollSeconds         delay between polls (default 10)
- * @param args.container           pod container to run the HTTP calls in (default 'jnlp')
  */
 def call(Map args) {
     String image    = args.image ?: error('dadaConsoleDeploy: image is required')
@@ -43,7 +46,6 @@ def call(Map args) {
     String console  = (args.get('consoleUrl', 'https://console.dada-tuda.ru') ?: 'https://console.dada-tuda.ru') as String
     int    waitSecs = (args.get('timeoutSeconds', 900) ?: 900) as int
     int    pollSecs = (args.get('pollSeconds', 10) ?: 10) as int
-    String runIn    = (args.get('container', 'jnlp') ?: 'jnlp') as String
 
     console = console.replaceAll('/+$', '')
 
@@ -54,8 +56,7 @@ def call(Map args) {
                 "DADA_DEPLOY_WAIT=${waitSecs}",
                 "DADA_DEPLOY_POLL=${pollSecs}",
         ]) {
-            container(runIn) {
-                sh '''
+            sh '''
                 set -eu
                 set +x
 
@@ -63,14 +64,46 @@ def call(Map args) {
                 trap 'rm -rf "$work"' EXIT
                 field() { sed -n "s/.*\\"$2\\"[[:space:]]*:[[:space:]]*\\"\\{0,1\\}\\([^\\",}]*\\).*/\\1/p" "$1" | head -n 1; }
 
+                if command -v curl >/dev/null 2>&1; then
+                    client=curl
+                elif command -v wget >/dev/null 2>&1; then
+                    client=wget
+                else
+                    echo "dadaConsoleDeploy: neither curl nor wget in this container" >&2
+                    exit 1
+                fi
+
+                http() {
+                    if [ "$client" = curl ]; then
+                        if [ $# -eq 3 ]; then
+                            curl -sS -o "$1" -w '%{http_code}' -X POST \
+                                -H "X-Dada-Deploy-Token: $DADA_DEPLOY_TOKEN" \
+                                -H "Content-Type: application/json" \
+                                --data-binary @"$3" "$2"
+                        else
+                            curl -sS -o "$1" -w '%{http_code}' \
+                                -H "X-Dada-Deploy-Token: $DADA_DEPLOY_TOKEN" "$2"
+                        fi
+                        return 0
+                    fi
+
+                    if [ $# -eq 3 ]; then
+                        wget -q -S -O "$1" \
+                            --header="X-Dada-Deploy-Token: $DADA_DEPLOY_TOKEN" \
+                            --header="Content-Type: application/json" \
+                            --post-file "$3" "$2" 2> "$work/headers" || true
+                    else
+                        wget -q -S -O "$1" \
+                            --header="X-Dada-Deploy-Token: $DADA_DEPLOY_TOKEN" \
+                            "$2" 2> "$work/headers" || true
+                    fi
+                    sed -n 's|^[[:space:]]*HTTP/[0-9.]*[[:space:]]\\([0-9][0-9][0-9]\\).*|\\1|p' "$work/headers" | tail -n 1
+                }
+
                 printf '{"image":"%s"}' "$DADA_DEPLOY_IMAGE" > "$work/req.json"
-                code=$(curl -sS -o "$work/trigger.json" -w '%{http_code}' -X POST \
-                    -H "X-Dada-Deploy-Token: $DADA_DEPLOY_TOKEN" \
-                    -H "Content-Type: application/json" \
-                    --data-binary @"$work/req.json" \
-                    "$DADA_CONSOLE_URL/api/v1/deploy")
+                code=$(http "$work/trigger.json" "$DADA_CONSOLE_URL/api/v1/deploy" "$work/req.json")
                 if [ "$code" != "200" ] && [ "$code" != "202" ]; then
-                    echo "dadaConsoleDeploy: POST /api/v1/deploy returned HTTP $code: $(cat "$work/trigger.json")" >&2
+                    echo "dadaConsoleDeploy: POST /api/v1/deploy returned HTTP ${code:-none}: $(cat "$work/trigger.json" 2>/dev/null)" >&2
                     exit 1
                 fi
 
@@ -83,11 +116,9 @@ def call(Map args) {
 
                 deadline=$(( $(date +%s) + DADA_DEPLOY_WAIT ))
                 while :; do
-                    code=$(curl -sS -o "$work/op.json" -w '%{http_code}' \
-                        -H "X-Dada-Deploy-Token: $DADA_DEPLOY_TOKEN" \
-                        "$DADA_CONSOLE_URL/api/v1/deploy/operations/$op")
+                    code=$(http "$work/op.json" "$DADA_CONSOLE_URL/api/v1/deploy/operations/$op")
                     if [ "$code" != "200" ]; then
-                        echo "dadaConsoleDeploy: poll of operation $op returned HTTP $code: $(cat "$work/op.json")" >&2
+                        echo "dadaConsoleDeploy: poll of operation $op returned HTTP ${code:-none}: $(cat "$work/op.json" 2>/dev/null)" >&2
                         exit 1
                     fi
 
@@ -112,7 +143,6 @@ def call(Map args) {
                     sleep "$DADA_DEPLOY_POLL"
                 done
             '''
-            }
         }
     }
 }
