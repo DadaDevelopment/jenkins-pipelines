@@ -21,6 +21,8 @@ def call(Map config) {
     def infra = config.get("infra", false)
     def INFRA_PROJECT = ((config.get('infraProject', 'example-project') ?: 'example-project') as String).trim()
     def INFRA_ENV = ((config.get('infraEnv', 'prod') ?: 'prod') as String).trim()
+    def CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID = ((config.get('consoleDeployTokenCredentialId', '') ?: '') as String).trim()
+    def CONSOLE_URL = ((config.get('consoleUrl', 'https://console.dada-tuda.ru') ?: 'https://console.dada-tuda.ru') as String).trim()
     kubePodTemplate(
             builderProfile: 'python',
             builderImage: BUILDER_IMAGE,
@@ -292,6 +294,14 @@ def call(Map config) {
                                                  credentialsId,
                                                 authType,)
                                     }
+                                }
+
+                                if (CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID != '') {
+                                    dadaConsoleDeploy(
+                                            image: image,
+                                            tokenCredentialsId: CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID,
+                                            consoleUrl: CONSOLE_URL,
+                                    )
                                 }
                             }
                         }
