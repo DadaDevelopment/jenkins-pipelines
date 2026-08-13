@@ -164,6 +164,12 @@ spec:
                             echo "using repo Dockerfile at ${dfPath}"
                         } else {
                             def fw = (params.detected_framework ?: '').trim()
+                            if (!fw) {
+                                fw = sniffFrameworkFromCheckout(env.CTX)
+                                if (fw) {
+                                    echo "framework was empty in the build request — read '${fw}' off the checked-out sources"
+                                }
+                            }
                             def df = renderDockerfile(fw, [
                                 install: (params.install_cmd ?: '').trim(),
                                 build  : (params.build_cmd ?: '').trim(),
@@ -203,6 +209,38 @@ spec:
 }
 
 // parsePort returns the numeric port or 0 when the parameter is empty/garbage.
+/**
+ * sniffFrameworkFromCheckout is the last line of defence when the build request
+ * carries no framework: read the answer off the sources already on disk. Every
+ * earlier detector works over an API (GitHub contents, the upload archive
+ * listing) and can come back empty for reasons that have nothing to do with the
+ * repo — a listing call that failed, an installation token that could not read a
+ * private tree, a shape nobody taught it yet. The clone in the workspace has no
+ * such failure mode: it is the code we are about to build.
+ *
+ * Live case 2026-08-13: keksmd/family-tree connected from GitHub and built with
+ * framework '' twice, while the very same sources sitting in src/ carried a
+ * python entrypoint one directory down.
+ *
+ * Looks two levels deep, matching the wrapper-folder shape both other detectors
+ * already handle. Deliberately narrower than they are: only shapes whose
+ * template works with no further input (node, go, python). 'static' is left out
+ * on purpose — that template runs an npm build, so guessing it for a lone
+ * index.html would trade a clear "no framework" error for a confusing build
+ * failure.
+ */
+def sniffFrameworkFromCheckout(String ctx) {
+    return sh(returnStdout: true, script: """
+        cd '${ctx}' 2>/dev/null || exit 0
+        if [ -f package.json ]; then echo node; exit 0; fi
+        if [ -f go.mod ]; then echo go; exit 0; fi
+        if find . -maxdepth 2 \\( -name 'requirements.txt' -o -name 'pyproject.toml' -o -name 'setup.py' -o -name '*.py' \\) 2>/dev/null | head -1 | grep -q . ; then
+            echo python
+            exit 0
+        fi
+    """).trim()
+}
+
 def parsePort(String raw) {
     def s = (raw ?: '').trim()
     return s ==~ /\d+/ ? (s as int) : 0
