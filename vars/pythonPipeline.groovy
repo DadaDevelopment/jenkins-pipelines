@@ -258,42 +258,26 @@ def call(Map config) {
                                         buildArgs: ["PYTHON_VERSION=${PYTHON_VER}"]
                                 )
 
-                                def repoUrl = 'ssh://git@bitbucket.dada-tuda.ru:7999/dada/dada-argo.git'
+                                def repoUrl = 'https://github.com/DadaDevelopment/dada-argo.git'
                                 def branch = 'develop'
-                                def authType = 'ssh'
-                                def credentialsId = 'bitbucket-jenkins'
+                                def authType = 'https'
+                                def credentialsId = 'gh-token'
 
-                                withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-jenkins', keyFileVariable: 'SSH_KEY')]) {
+                                if (infra) {
+                                    branch = 'console-migration'
+                                    repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
+                                }
 
-                                    if (infra) {
-                                        credentialsId = 'gh-token'
-                                        authType = 'https'
-                                        branch = 'console-migration'
-                                        repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
-                                    }
-                                    if (authType == 'ssh') {
-                                        sh '''
-                                        set -eux
-                                        mkdir -p /tmp/.ssh
-                                        chmod 700 /tmp/.ssh
-                                        ssh-keyscan -p 7999 -H bitbucket.dada-tuda.ru > /tmp/.ssh/known_hosts
-                                        chmod 644 /tmp/.ssh/known_hosts
-                                    '''
-                                    }
-
-                                    def gitSshCmd = "ssh -i ${SSH_KEY} -p 7999 -o IdentitiesOnly=yes -o UserKnownHostsFile=/tmp/.ssh/known_hosts -o StrictHostKeyChecking=yes"
-
-                                    withEnv(["PATH=/tools:${env.PATH}", "GIT_SSH_COMMAND=${gitSshCmd}"]) {
-                                        doDeploy(image)
-                                        deployToArgo(repoUrl,
-                                                values,
-                                                 result.getTag(),
-                                                 commitAuthor,
-                                                 commitMessage,
-                                                 branch,
-                                                 credentialsId,
-                                                authType,)
-                                    }
+                                withEnv(["PATH=/tools:${env.PATH}"]) {
+                                    doDeploy(image)
+                                    deployToArgo(repoUrl,
+                                            values,
+                                            result.getTag(),
+                                            commitAuthor,
+                                            commitMessage,
+                                            branch,
+                                            credentialsId,
+                                            authType,)
                                 }
 
                                 if (CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID != '') {

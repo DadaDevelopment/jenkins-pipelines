@@ -69,9 +69,9 @@ def call(Map config) {
                             } else {
                                 values = "helm/spring/services/${PROJECT_NAME}/values-dev.yaml"
                             }
-                            repoUrl = 'https://bitbucket.dada-tuda.ru/scm/dada/dada-argo.git'
+                            repoUrl = 'https://github.com/DadaDevelopment/dada-argo.git'
                             branch = 'develop'
-                            credentialsId = 'bitbucket-administrator-creds'
+                            credentialsId = 'gh-token'
                             authType = 'https'
                         }
 
