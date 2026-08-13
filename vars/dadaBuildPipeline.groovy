@@ -130,9 +130,10 @@ spec:
                                     echo "zip-slip guard: entry escapes src/: $ESCAPED" >&2
                                     exit 1
                                 fi
-                                ENTRY_COUNT=$(find src -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
+                                CONTENT_ENTRIES=$(find src -mindepth 1 -maxdepth 1 ! -name '.*' ! -name '__MACOSX')
+                                ENTRY_COUNT=$(printf '%s\\n' "$CONTENT_ENTRIES" | grep -c . || true)
                                 if [ "$ENTRY_COUNT" = "1" ]; then
-                                    ONLY_ENTRY=$(find src -mindepth 1 -maxdepth 1)
+                                    ONLY_ENTRY=$CONTENT_ENTRIES
                                     if [ -d "$ONLY_ENTRY" ]; then
                                         TMPDIR=$(mktemp -d)
                                         find "$ONLY_ENTRY" -mindepth 1 -maxdepth 1 -exec mv {} "$TMPDIR"/ \\;
