@@ -109,7 +109,7 @@ metadata:
     app.kubernetes.io/part-of: jenkins-common
     app.kubernetes.io/managed-by: jenkins
 spec:
-  priorityClassName: critical
+  priorityClassName: ci-agent
   # Resilience against cluster CoreDNS flaps (single-replica, overloaded):
   # ndots:1 stops search-domain expansion storms for external names like
   # nexus.dada-tuda.ru (otherwise 4+ queries x A/AAAA per lookup); attempts/timeout
@@ -250,7 +250,7 @@ metadata:
     app.kubernetes.io/part-of: jenkins-common
     app.kubernetes.io/managed-by: jenkins
 spec:
-  priorityClassName: critical
+  priorityClassName: ci-agent
   dnsConfig:
     options:
       - name: ndots
