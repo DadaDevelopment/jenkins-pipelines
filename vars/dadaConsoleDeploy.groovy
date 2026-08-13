@@ -13,6 +13,13 @@
  * that edits the gitops compose by hand leaves the console believing whatever it
  * last saw. fin-core/findata drifted 104 backend builds that way.
  *
+ * The calls run in the `jnlp` container on purpose. Pipelines reach this step from
+ * inside a toolchain container, and those images carry no HTTP client: the
+ * `docker:24-cli` image has only busybox wget and the uv builder image has
+ * neither, so a release died with `curl: not found` after the image was already
+ * pushed. `jenkins/inbound-agent` ships curl and exists in every pod template
+ * here, and the workspace is the same volume in every container.
+ *
  * The token is a per-app deploy hook (minted at
  * POST /api/v1/projects/{p}/environments/{e}/apps/{a}/deploy-hooks) held as a
  * Jenkins secret-text credential. It is scoped to one app: it cannot deploy
@@ -28,6 +35,7 @@
  * @param args.consoleUrl          console base URL (default 'https://console.dada-tuda.ru')
  * @param args.timeoutSeconds      how long to wait for a terminal operation (default 900)
  * @param args.pollSeconds         delay between polls (default 10)
+ * @param args.container           pod container to run the HTTP calls in (default 'jnlp')
  */
 def call(Map args) {
     String image    = args.image ?: error('dadaConsoleDeploy: image is required')
@@ -35,6 +43,7 @@ def call(Map args) {
     String console  = (args.get('consoleUrl', 'https://console.dada-tuda.ru') ?: 'https://console.dada-tuda.ru') as String
     int    waitSecs = (args.get('timeoutSeconds', 900) ?: 900) as int
     int    pollSecs = (args.get('pollSeconds', 10) ?: 10) as int
+    String runIn    = (args.get('container', 'jnlp') ?: 'jnlp') as String
 
     console = console.replaceAll('/+$', '')
 
@@ -45,7 +54,8 @@ def call(Map args) {
                 "DADA_DEPLOY_WAIT=${waitSecs}",
                 "DADA_DEPLOY_POLL=${pollSecs}",
         ]) {
-            sh '''
+            container(runIn) {
+                sh '''
                 set -eu
                 set +x
 
@@ -102,6 +112,7 @@ def call(Map args) {
                     sleep "$DADA_DEPLOY_POLL"
                 done
             '''
+            }
         }
     }
 }
