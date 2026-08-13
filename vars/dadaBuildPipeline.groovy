@@ -261,8 +261,8 @@ EXPOSE ${p}
 
         case ['fastapi', 'django', 'flask', 'python']:
             int p = port ?: 8000
-            String pyInstall = install ?: 'if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; elif [ -f setup.py ]; then pip install --no-cache-dir -e .; else echo "no python manifest - skipping install"; fi'
-            String pyStart = start ?: 'for f in main.py bot.py app.py; do [ -f "$f" ] && exec python "$f"; done; f=$(ls *.py 2>/dev/null | head -1); [ -n "$f" ] && exec python "$f"; echo "no python entrypoint found (looked for main.py, bot.py, app.py, then any *.py)" >&2; exit 1'
+            String pyInstall = install ?: 'if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; elif [ -f setup.py ]; then pip install --no-cache-dir -e .; else r=$(ls */requirements.txt 2>/dev/null | head -1); if [ -n "$r" ]; then pip install --no-cache-dir -r "$r"; else echo "no python manifest - skipping install"; fi; fi'
+            String pyStart = start ?: 'for f in main.py bot.py app.py; do [ -f "$f" ] && exec python "$f"; done; f=$(ls *.py 2>/dev/null | head -1); [ -n "$f" ] && exec python "$f"; for d in */; do for f in main.py bot.py app.py; do [ -f "$d$f" ] && exec python "$d$f"; done; done; f=$(ls */*.py 2>/dev/null | head -1); [ -n "$f" ] && exec python "$f"; echo "no python entrypoint found (looked for main.py, bot.py, app.py, then any *.py, at the root and one directory down)" >&2; exit 1'
             return """FROM python:3.12-slim
 WORKDIR /app
 COPY . .
