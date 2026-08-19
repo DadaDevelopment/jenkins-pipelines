@@ -38,30 +38,31 @@ def call(Map args){
         def tokenCredentialId = ((args.webhookTokenCredentialId ?: '') as String).trim()
         def authScheme = (((args.webhookAuthScheme ?: 'Bearer') as String).trim()) ?: 'Bearer'
         if (tokenCredentialId) {
-            withCredentials([string(credentialsId: tokenCredentialId, variable: 'CI_FAILURE_WEBHOOK_TOKEN')]) {
-                withEnv([
-                        "CI_FAILURE_WEBHOOK_URL=${webhookUrl}",
-                        "CI_FAILURE_WEBHOOK_AUTH_SCHEME=${authScheme}",
-                ]) {
-                    sh '''
-                        set +x
-                        curl --silent --show-error --fail \
-                          --header "Content-Type: application/json" \
-                          --header "Authorization: ${CI_FAILURE_WEBHOOK_AUTH_SCHEME} ${CI_FAILURE_WEBHOOK_TOKEN}" \
-                          --data @.ci-failed-payload.json \
-                          "${CI_FAILURE_WEBHOOK_URL}" >/dev/null
-                    '''
+            withEnv([
+                    "CI_FAILURE_WEBHOOK_URL=${webhookUrl}",
+                    "CI_FAILURE_WEBHOOK_AUTH_SCHEME=${authScheme}",
+            ]) {
+                try {
+                    withCredentials([string(credentialsId: tokenCredentialId, variable: 'CI_FAILURE_WEBHOOK_TOKEN')]) {
+                        _postCiFailurePayload(true)
+                    }
+                } catch (bindErr) {
+                    if (!"${bindErr}".contains('CredentialNotFoundException')) {
+                        throw bindErr
+                    }
+                    echo "ci failure webhook token ${tokenCredentialId} is not secret text, reading its password half instead"
+                    withCredentials([usernamePassword(
+                            credentialsId: tokenCredentialId,
+                            usernameVariable: 'CI_FAILURE_WEBHOOK_TOKEN_USER',
+                            passwordVariable: 'CI_FAILURE_WEBHOOK_TOKEN',
+                    )]) {
+                        _postCiFailurePayload(true)
+                    }
                 }
             }
         } else {
             withEnv(["CI_FAILURE_WEBHOOK_URL=${webhookUrl}"]) {
-                sh '''
-                    set +x
-                    curl --silent --show-error --fail \
-                      --header "Content-Type: application/json" \
-                      --data @.ci-failed-payload.json \
-                      "${CI_FAILURE_WEBHOOK_URL}" >/dev/null
-                '''
+                _postCiFailurePayload(false)
             }
         }
         echo "ci failure webhook delivered to ${webhookUrl}"
@@ -70,4 +71,25 @@ def call(Map args){
     } finally {
         sh "rm -f ${payloadFile}"
     }
+}
+
+def _postCiFailurePayload(boolean authenticated) {
+    if (authenticated) {
+        sh '''
+            set +x
+            curl --silent --show-error --fail \
+              --header "Content-Type: application/json" \
+              --header "Authorization: ${CI_FAILURE_WEBHOOK_AUTH_SCHEME} ${CI_FAILURE_WEBHOOK_TOKEN}" \
+              --data @.ci-failed-payload.json \
+              "${CI_FAILURE_WEBHOOK_URL}" >/dev/null
+        '''
+        return
+    }
+    sh '''
+        set +x
+        curl --silent --show-error --fail \
+          --header "Content-Type: application/json" \
+          --data @.ci-failed-payload.json \
+          "${CI_FAILURE_WEBHOOK_URL}" >/dev/null
+    '''
 }
