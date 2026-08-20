@@ -14,6 +14,8 @@
 // are passed as parameters), so framework apps (Next.js, Vite, FastAPI, Go, …)
 // build without the user authoring a Dockerfile.
 
+import ru.dada.build.PythonLaunch
+
 def call(Map config = [:]) {
     pipeline {
         agent {
@@ -170,12 +172,14 @@ spec:
                                     echo "framework was empty in the build request — read '${fw}' off the checked-out sources"
                                 }
                             }
+                            def pySources = PythonLaunch.TEMPLATE_FRAMEWORKS.contains(fw) ? pythonEntrypointSources(env.CTX) : [:]
                             def df = renderDockerfile(fw, [
                                 install: (params.install_cmd ?: '').trim(),
                                 build  : (params.build_cmd ?: '').trim(),
                                 start  : (params.start_cmd ?: '').trim(),
                                 output : (params.output_dir ?: '').trim(),
                                 port   : parsePort(params.app_port),
+                                sources: pySources,
                             ])
                             if (df == null) {
                                 error("framework '${fw}' has no template and repo ships no Dockerfile — add a Dockerfile to the repo or extend dadaBuildPipeline")
@@ -241,6 +245,42 @@ def sniffFrameworkFromCheckout(String ctx) {
     """).trim()
 }
 
+/**
+ * pythonEntrypointSources reads the python files that could carry an ASGI
+ * application, so PythonLaunch can turn the entrypoint into a dotted module
+ * instead of a guessed file name. Root-level names are read too, because their
+ * mere presence is what keeps a repo that works today on the legacy launch
+ * path. Nothing beyond those candidate names is read: a full workspace read
+ * would be unbounded.
+ */
+def pythonEntrypointSources(String ctx) {
+    def rootNames = ru.dada.build.PythonLaunch.ROOT_ENTRY_NAMES.join(' ')
+    def nestedNames = ru.dada.build.PythonLaunch.NESTED_ENTRY_NAMES.join(' ')
+    def listing = sh(returnStdout: true, script: """
+        cd '${ctx}' 2>/dev/null || exit 0
+        for f in ${rootNames}; do
+            [ -f "\$f" ] && echo "\$f"
+        done
+        for d in */; do
+            for f in ${nestedNames}; do
+                [ -f "\$d\$f" ] && echo "\$d\$f"
+            done
+        done
+        exit 0
+    """).trim()
+    def sources = [:]
+    if (!listing) {
+        return sources
+    }
+    listing.split('\n').each { line ->
+        def rel = line.trim()
+        if (rel) {
+            sources[rel] = readFile(file: ctx + '/' + rel)
+        }
+    }
+    return sources
+}
+
 def parsePort(String raw) {
     def s = (raw ?: '').trim()
     return s ==~ /\d+/ ? (s as int) : 0
@@ -300,7 +340,7 @@ EXPOSE ${p}
         case ['fastapi', 'django', 'flask', 'python']:
             int p = port ?: 8000
             String pyInstall = install ?: 'if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; elif [ -f setup.py ]; then pip install --no-cache-dir -e .; else r=$(ls */requirements.txt 2>/dev/null | head -1); if [ -n "$r" ]; then pip install --no-cache-dir -r "$r"; else echo "no python manifest - skipping install"; fi; fi'
-            String pyStart = start ?: 'for f in main.py bot.py app.py; do [ -f "$f" ] && exec python "$f"; done; f=$(ls *.py 2>/dev/null | head -1); [ -n "$f" ] && exec python "$f"; for d in */; do for f in main.py bot.py app.py; do [ -f "$d$f" ] && exec python "$d$f"; done; done; f=$(ls */*.py 2>/dev/null | head -1); [ -n "$f" ] && exec python "$f"; echo "no python entrypoint found (looked for main.py, bot.py, app.py, then any *.py, at the root and one directory down)" >&2; exit 1'
+            String pyStart = PythonLaunch.startLine(fw, p, (Map<String, String>) (d.sources ?: [:]), start)
             return """FROM python:3.12-slim
 WORKDIR /app
 COPY . .
