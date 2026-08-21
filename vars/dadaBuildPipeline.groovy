@@ -15,6 +15,7 @@
 // build without the user authoring a Dockerfile.
 
 import ru.dada.build.PythonLaunch
+import ru.dada.build.StaticSite
 
 def call(Map config = [:]) {
     pipeline {
@@ -322,20 +323,11 @@ def renderDockerfile(String fw, Map d) {
             }
             return sb.toString()
 
-        // Static / SPA: build, then serve the output dir with nginx.
-        case ['react', 'vite', 'static']:
-            int p = port ?: 80
-            return """FROM node:20-bookworm AS build
-WORKDIR /app
-RUN corepack enable
-COPY . .
-RUN ${install ?: 'npm install'}
-RUN ${build ?: 'npm run build'}
-FROM nginx:alpine
-COPY --from=build /app/${output} /usr/share/nginx/html
-RUN printf 'server {\\n    listen ${p};\\n    location / {\\n        root /usr/share/nginx/html;\\n        try_files \$uri \$uri/ /index.html;\\n    }\\n}\\n' > /etc/nginx/conf.d/default.conf
-EXPOSE ${p}
-"""
+        // Static / SPA: build when the repo has a package.json, then serve the
+        // result with nginx. A repo of plain HTML has nothing to install and is
+        // served as-is — see ru.dada.build.StaticSite.
+        case StaticSite.TEMPLATE_FRAMEWORKS:
+            return StaticSite.dockerfile(port, install, build, output)
 
         case ['fastapi', 'django', 'flask', 'python']:
             int p = port ?: 8000
