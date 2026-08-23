@@ -28,6 +28,10 @@ def call(Map config = [:]) {
 apiVersion: v1
 kind: Pod
 spec:
+  # Keep console-triggered builds ahead of ordinary workloads without granting
+  # them the right to evict anything.  The PriorityClass has value 100000 and
+  # preemptionPolicy: Never; it is deliberately not `critical`.
+  priorityClassName: ci-agent
   containers:
   - name: docker
     image: docker:24-cli
