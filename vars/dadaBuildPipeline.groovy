@@ -341,10 +341,11 @@ def renderDockerfile(String fw, Map d) {
 
         case ['fastapi', 'django', 'flask', 'python']:
             int p = port ?: 8000
-            String pyInstall = install ?: 'if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; elif [ -f pyproject.toml ]; then pip install --no-cache-dir .; elif [ -f setup.py ]; then pip install --no-cache-dir -e .; else r=$(ls */requirements.txt 2>/dev/null | head -1); if [ -n "$r" ]; then pip install --no-cache-dir -r "$r"; else echo "no python manifest - skipping install"; fi; fi'
+            String pyInstall = install ?: 'if [ -f requirements.txt ]; then uv pip install --system --no-cache -r requirements.txt; elif [ -f pyproject.toml ]; then uv pip install --system --no-cache .; elif [ -f setup.py ]; then uv pip install --system --no-cache -e .; else r=$(ls */requirements.txt 2>/dev/null | head -1); if [ -n "$r" ]; then uv pip install --system --no-cache -r "$r"; else echo "no python manifest - skipping install"; fi; fi'
             String pyStart = PythonLaunch.startLine(fw, p, (Map<String, String>) (d.sources ?: [:]), start)
             return """FROM python:3.12-slim
 WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY . .
 RUN ${pyInstall}
 ENV PORT=${p}
