@@ -82,6 +82,7 @@ spec:
         stages {
             stage('resolve identity') {
                 steps {
+                    retry(2) {
                     script {
                         if (params.project_slug?.trim() && params.app_name?.trim()) {
                             env.PROJ = params.project_slug.trim(); env.APP = params.app_name.trim(); env.ROOTDIR = '.'
@@ -103,10 +104,12 @@ spec:
                             echo "identity (db): ${env.PROJ}/${env.APP} rootdir=${env.ROOTDIR}"
                         }
                     }
+                    }
                 }
             }
             stage('clone') {
                 steps {
+                    retry(2) {
                     script {
                         if (params.archive_url?.trim()) {
                             sh '''
@@ -154,10 +157,12 @@ spec:
                             sh 'set -e; rm -rf src; git clone --depth 1 --branch "$branch" "$repo" src'
                         }
                     }
+                    }
                 }
             }
             stage('build & push') {
                 steps {
+                    retry(2) {
                     script {
                         env.TAG = (params.branch + '-b' + env.BUILD_NUMBER).replaceAll('[^A-Za-z0-9_.-]', '-')
                         env.IMG = 'nexus.dada-tuda.ru/' + env.PROJ + '/' + env.APP
@@ -211,6 +216,7 @@ spec:
                     }
                     sleep time: 5, unit: 'SECONDS'
                     echo "build & push complete for ${env.IMG}:${env.TAG}"
+                    }
                 }
             }
         }
