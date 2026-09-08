@@ -268,11 +268,19 @@ def call(Map config) {
                                     repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
                                 }
 
+                                def pinnedTag
+                                def pinnedImage
+
                                 withEnv(["PATH=/tools:${env.PATH}"]) {
                                     doDeploy(image)
+
+                                    def digest = resolveImageDigest(image: image)
+                                    pinnedTag = result.getTag() + '@' + digest
+                                    pinnedImage = image + '@' + digest
+
                                     deployToArgo(repoUrl,
                                             values,
-                                            result.getTag(),
+                                            pinnedTag,
                                             commitAuthor,
                                             commitMessage,
                                             branch,
@@ -282,7 +290,7 @@ def call(Map config) {
 
                                 if (CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID != '') {
                                     dadaConsoleDeploy(
-                                            image: image,
+                                            image: pinnedImage,
                                             tokenCredentialsId: CONSOLE_DEPLOY_TOKEN_CREDENTIAL_ID,
                                             consoleUrl: CONSOLE_URL,
                                     )

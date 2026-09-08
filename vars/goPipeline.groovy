@@ -157,12 +157,14 @@ def call(Map config) {
                                 repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
                             }
 
+                            def pinnedTag = result.getTag() + '@' + resolveImageDigest(image: image)
+
                             withEnv([
                                     "PATH=/tools:${env.PATH}"
                             ]) {
                                 deployToArgo(repoUrl,
                                         values,
-                                        result.getTag(),
+                                        pinnedTag,
                                         commitAuthor,
                                         commitMessage,
                                         branch,
