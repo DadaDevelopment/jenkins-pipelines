@@ -15,6 +15,7 @@
 // build without the user authoring a Dockerfile.
 
 import ru.dada.build.PythonLaunch
+import ru.dada.build.RootDir
 import ru.dada.build.StaticSite
 
 def call(Map config = [:]) {
@@ -67,6 +68,7 @@ spec:
             string(name: 'env',                defaultValue: '',      description: 'environment_id UUID (DB-lookup fallback)')
             string(name: 'project_slug',       defaultValue: '',      description: 'preferred identity from build-agent runner')
             string(name: 'app_name',           defaultValue: '',      description: 'preferred identity from build-agent runner')
+            string(name: 'root_dir',           defaultValue: '',      description: 'monorepo subdirectory to build from (build context + Dockerfile); empty = repo root')
             // Build-time framework detection (sent by build-agent). Used to
             // template a Dockerfile when the repo has none. Empty = unknown.
             string(name: 'detected_framework', defaultValue: '',      description: 'specific framework: nextjs|node|vite|python|go|...')
@@ -85,11 +87,11 @@ spec:
                     retry(2) {
                     script {
                         if (params.project_slug?.trim() && params.app_name?.trim()) {
-                            env.PROJ = params.project_slug.trim(); env.APP = params.app_name.trim(); env.ROOTDIR = '.'
-                            echo "identity (params): ${env.PROJ}/${env.APP}"
+                            env.PROJ = params.project_slug.trim(); env.APP = params.app_name.trim(); env.ROOTDIR = buildRootDir(params.root_dir)
+                            echo "identity (params): ${env.PROJ}/${env.APP} rootdir=${env.ROOTDIR}"
                         } else if (params.__proj?.trim() && params.__app?.trim()) {
-                            env.PROJ = params.__proj.trim(); env.APP = params.__app.trim(); env.ROOTDIR = '.'
-                            echo "identity (override): ${env.PROJ}/${env.APP}"
+                            env.PROJ = params.__proj.trim(); env.APP = params.__app.trim(); env.ROOTDIR = buildRootDir(params.root_dir)
+                            echo "identity (override): ${env.PROJ}/${env.APP} rootdir=${env.ROOTDIR}"
                         } else {
                             def rf = sh(returnStdout: true, script: 'R="$repo"; R="${R#*://}"; R="${R#*@}"; R="${R#*/}"; R="${R%.git}"; printf "%s" "$R"').trim()
                             container('psql') {
@@ -98,7 +100,7 @@ spec:
                                     def row = sh(returnStdout: true, script: "psql -h postgresql.databases.svc.cluster.local -U dada -d cloud-console -tAF '|' -c \"" + q + "\"").trim()
                                     if (!row) { error("no git_repos row for env=" + params.env + " repo=" + rf) }
                                     def f = row.split('\\|')
-                                    env.PROJ = f[0]; env.APP = f[1]; env.ROOTDIR = (f.size() > 2 ? f[2] : '.')
+                                    env.PROJ = f[0]; env.APP = f[1]; env.ROOTDIR = buildRootDir(f.size() > 2 ? f[2] : '')
                                 }
                             }
                             echo "identity (db): ${env.PROJ}/${env.APP} rootdir=${env.ROOTDIR}"
@@ -166,7 +168,10 @@ spec:
                     script {
                         env.TAG = (params.branch + '-b' + env.BUILD_NUMBER).replaceAll('[^A-Za-z0-9_.-]', '-')
                         env.IMG = 'nexus.dada-tuda.ru/' + env.PROJ + '/' + env.APP
-                        env.CTX = 'src/' + (env.ROOTDIR ?: '.')
+                        env.CTX = 'src/' + (env.ROOTDIR ?: RootDir.REPO_ROOT)
+                        if (env.CTX != 'src/' + RootDir.REPO_ROOT && !fileExists(env.CTX)) {
+                            error("root_dir '${env.ROOTDIR}' does not exist in ${params.branch ?: 'the checkout'}")
+                        }
                         env.CACHE_REF = env.IMG + ':buildcache-' + (params.branch ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
                         def dfName = ['Dockerfile', 'dockerfile'].find { fileExists(env.CTX + '/' + it) }
@@ -221,6 +226,20 @@ spec:
             }
         }
     }
+}
+
+/**
+ * buildRootDir turns the root_dir parameter (or the git_repos column on the
+ * db fallback) into the directory the build runs from: '.' for the repo root,
+ * the cleaned subdirectory otherwise. An unsafe value fails the build here,
+ * before it can reach a shell path.
+ */
+def buildRootDir(String raw) {
+    String dir = RootDir.normalize(raw)
+    if (dir == null) {
+        error("root_dir '${raw}' is not a relative path inside the repository (no '..', no leading '/', only letters, digits, '.', '_', '-', '/')")
+    }
+    return dir
 }
 
 // parsePort returns the numeric port or 0 when the parameter is empty/garbage.
