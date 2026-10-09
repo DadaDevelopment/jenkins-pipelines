@@ -35,6 +35,11 @@ spec:
   # preemptionPolicy: Never; it is deliberately not `critical`.
   priorityClassName: ci-agent
   containers:
+  # Same digest kubePodTemplate pins and jenkins-warm-cache keeps on every node.
+  # Left to the plugin default (a floating -jdk tag) it missed the node cache and
+  # cost a 6.7s pull on #317.
+  - name: jnlp
+    image: jenkins/inbound-agent@sha256:65b16b388a32be41d95134a5be7ce58e20fbc4d862e12f021ae64bf83bd5fe7d
   - name: docker
     image: docker:24-cli
     command: ['sleep']
