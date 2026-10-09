@@ -209,6 +209,7 @@ spec:
                             echo "no Dockerfile in repo — generated for framework='${fw}':\n--- ${dfPath} ---\n${df}-----------------"
                         }
                     }
+                    script {
                     container('docker') {
                         def bx = [
                                 image: env.IMG + ':' + env.TAG,
@@ -225,6 +226,7 @@ spec:
                             echo "==> image: ${env.IMG}@\${DIG}"
                         """
                         dockerBuildxPush(bx + [cacheMode: 'export-only'])
+                    }
                     }
                     sleep time: 5, unit: 'SECONDS'
                     echo "build & push complete for ${env.IMG}:${env.TAG}"
