@@ -25,6 +25,7 @@ def call(Map config = [:]) {
                 cloud 'self-managed'
                 defaultContainer 'jnlp'
                 label 'dada-build-agent'
+                showRawYaml false
                 yaml """
 apiVersion: v1
 kind: Pod
