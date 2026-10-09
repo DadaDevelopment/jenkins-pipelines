@@ -40,22 +40,27 @@ spec:
     command: ['sleep']
     args: ['infinity']
     tty: true
-    env:
-    - name: DOCKER_HOST
-      value: tcp://localhost:2375
-  - name: dind
-    image: docker:24-dind
+  # buildx remote driver target. kubelet pulls this image, so the node copy that
+  # jenkins-warm-cache pins is reused; a buildkit started inside dind pulled it
+  # into dind's own store on every build (7s) and waited for dockerd (10s).
+  # Loopback only: nothing outside the pod can submit a build.
+  - name: buildkitd
+    image: moby/buildkit:buildx-stable-1
+    args: ['--addr', 'tcp://127.0.0.1:1234']
     securityContext:
       privileged: true
-    env:
-    - name: DOCKER_TLS_CERTDIR
-      value: ""
-    args: ['--host=tcp://0.0.0.0:2375']
+    volumeMounts:
+    - name: buildkit-state
+      mountPath: /var/lib/buildkit
   - name: psql
     image: postgres:16-alpine
     command: ['sleep']
     args: ['infinity']
     tty: true
+  volumes:
+  - name: buildkit-state
+    emptyDir:
+      sizeLimit: 30Gi
 """
             }
         }
@@ -205,20 +210,21 @@ spec:
                         }
                     }
                     container('docker') {
-                        sh 'for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done'
-                        dockerBuildxPush(
+                        def bx = [
                                 image: env.IMG + ':' + env.TAG,
                                 cacheRef: env.CACHE_REF,
                                 dockerfile: env.DOCKERFILE_PATH,
                                 context: env.CTX,
-                                metadataFile: 'image-meta.json'
-                        )
+                                buildkitAddr: 'tcp://127.0.0.1:1234',
+                        ]
+                        dockerBuildxPush(bx + [metadataFile: 'image-meta.json', cacheMode: 'none'])
                         sh """
                             set -e
                             DIG=\$(tr -d '[:space:]' < image-meta.json | grep -oE '"containerimage.digest":"sha256:[0-9a-f]{64}"' | grep -oE 'sha256:[0-9a-f]{64}' | head -1)
                             test -n "\${DIG}"
                             echo "==> image: ${env.IMG}@\${DIG}"
                         """
+                        dockerBuildxPush(bx + [cacheMode: 'export-only'])
                     }
                     sleep time: 5, unit: 'SECONDS'
                     echo "build & push complete for ${env.IMG}:${env.TAG}"
