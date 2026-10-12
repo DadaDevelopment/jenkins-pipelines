@@ -18,6 +18,8 @@ def call(Map config) {
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
     def OVERRIDE_VALUES =  config.get('values_override', '')
     def BUILDER_IMAGE = "ghcr.io/astral-sh/uv:python${PYTHON_VER}-bookworm-slim"
+    // Match the reachable Debian mirror used by service Docker builds; allow an override.
+    def APT_MIRROR = (config.get('aptMirror', 'https://mirror.yandex.ru') as String).trim().replaceAll('/+$', '')
     def infra = config.get("infra", false)
     def INFRA_PROJECT = ((config.get('infraProject', 'example-project') ?: 'example-project') as String).trim()
     def INFRA_ENV = ((config.get('infraEnv', 'prod') ?: 'prod') as String).trim()
@@ -59,16 +61,19 @@ def call(Map config) {
 
                     container('builder') {
                         runStage("Toolchain") {
-                            sh '''
+                            withEnv(["APT_MIRROR=${APT_MIRROR}"]) {
+                                sh '''
                                 set -eux
                                 # Survive transient cluster DNS flaps (overloaded single CoreDNS):
                                 # retry network ops with backoff that outlasts a CoreDNS restart window.
                                 retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
                                 retry python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 /tools/yq --version
-                                retry apt-get update
+                                python3 -c "import os,pathlib; mirror=os.environ['APT_MIRROR']; files=[pathlib.Path('/etc/apt/sources.list'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.sources'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.list')]; [(p.write_text(p.read_text().replace('http://deb.debian.org',mirror).replace('https://deb.debian.org',mirror))) for p in files if p.is_file() and mirror]"
+                                retry apt-get -o APT::Update::Error-Mode=any update
                                 retry apt-get install -y gcc python3-dev libpq-dev
                               '''
+                            }
                             withEnv(["PATH=/tools:${env.PATH}"]) {
                                 sh '''
                                 set -eux
