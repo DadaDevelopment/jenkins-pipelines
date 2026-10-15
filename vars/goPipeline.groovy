@@ -67,8 +67,8 @@ def call(Map config) {
                             # Survive transient cluster DNS flaps (overloaded single CoreDNS):
                             # retry network ops with backoff that outlasts a CoreDNS restart window.
                             retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
-                            retry python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)" \
-                              || retry sh -c 'wget -qO /tools/yq https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 && chmod 0755 /tools/yq'
+                            retry python3 -c "import os,socket,urllib.request; socket.setdefaulttimeout(60); p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)" \
+                              || retry sh -c 'wget -qT60 -O /tools/yq https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 && chmod 0755 /tools/yq'
                             /tools/yq --version
                             id
                             hostname

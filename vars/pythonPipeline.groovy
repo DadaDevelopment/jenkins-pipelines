@@ -67,7 +67,7 @@ def call(Map config) {
                                 # Survive transient cluster DNS flaps (overloaded single CoreDNS):
                                 # retry network ops with backoff that outlasts a CoreDNS restart window.
                                 retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
-                                retry python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
+                                retry python3 -c "import os,socket,urllib.request; socket.setdefaulttimeout(60); p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 /tools/yq --version
                                 python3 -c "import os,pathlib; mirror=os.environ['APT_MIRROR']; files=[pathlib.Path('/etc/apt/sources.list'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.sources'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.list')]; [(p.write_text(p.read_text().replace('http://deb.debian.org',mirror).replace('https://deb.debian.org',mirror))) for p in files if p.is_file() and mirror]"
                                 retry apt-get -o APT::Update::Error-Mode=any update

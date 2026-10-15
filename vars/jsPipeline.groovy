@@ -64,7 +64,7 @@ def call(Map config) {
                         sh '''
                             set -eux
                             if command -v python3 >/dev/null 2>&1; then
-                              python3 -c "import os,urllib.request; p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
+                              python3 -c "import os,socket,urllib.request; socket.setdefaulttimeout(60); p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                             else
                               echo "python3 not found in builder image, cannot bootstrap /tools/yq"
                               exit 1
