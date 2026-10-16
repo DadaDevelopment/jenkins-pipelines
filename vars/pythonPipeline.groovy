@@ -69,8 +69,21 @@ def call(Map config) {
                                 retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
                                 retry python3 -c "import os,socket,urllib.request; socket.setdefaulttimeout(60); p='/tools/yq'; urllib.request.urlretrieve('https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64', p); os.chmod(p,0o755)"
                                 /tools/yq --version
-                                python3 -c "import os,pathlib; mirror=os.environ['APT_MIRROR']; files=[pathlib.Path('/etc/apt/sources.list'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.sources'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.list')]; [(p.write_text(p.read_text().replace('http://deb.debian.org',mirror).replace('https://deb.debian.org',mirror))) for p in files if p.is_file() and mirror]"
-                                retry apt-get -o APT::Update::Error-Mode=any update
+                                apt_mirror_write() { python3 -c "import pathlib,sys; mirror=sys.argv[1]; files=[pathlib.Path('/etc/apt/sources.list'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.sources'),*pathlib.Path('/etc/apt/sources.list.d').glob('*.list')]; [(p.write_text(p.read_text().replace('http://deb.debian.org',mirror).replace('https://deb.debian.org',mirror))) for p in files if p.is_file() and mirror]" "$1"; }
+                                # Neither mirror is reliable long-term: yandex sometimes
+                                # serves stale bookworm-security metadata (builds 91-93),
+                                # the Debian CDN times out from the agents (build 76).
+                                # Try the configured primary, fall back to the other one.
+                                case "$APT_MIRROR" in
+                                  *yandex*) APT_FALLBACK='https://deb.debian.org' ;;
+                                  *) APT_FALLBACK='https://mirror.yandex.ru' ;;
+                                esac
+                                apt_mirror_write "$APT_MIRROR"
+                                if ! retry apt-get -o APT::Update::Error-Mode=any update; then
+                                    echo "[apt-mirror] $APT_MIRROR failed; falling back to $APT_FALLBACK" >&2
+                                    apt_mirror_write "$APT_FALLBACK"
+                                    apt-get -o APT::Update::Error-Mode=any update
+                                fi
                                 retry apt-get install -y gcc python3-dev libpq-dev
                               '''
                             }
