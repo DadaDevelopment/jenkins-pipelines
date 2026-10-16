@@ -84,7 +84,12 @@ def call(Map config) {
                                     apt_mirror_write "$APT_FALLBACK"
                                     apt-get -o APT::Update::Error-Mode=any update
                                 fi
-                                retry apt-get install -y gcc python3-dev libpq-dev
+                                if ! retry apt-get install -y gcc python3-dev libpq-dev; then
+                                    echo "[apt-mirror] package download from $APT_MIRROR failed; falling back to $APT_FALLBACK" >&2
+                                    apt_mirror_write "$APT_FALLBACK"
+                                    apt-get -o APT::Update::Error-Mode=any update
+                                    apt-get install -y gcc python3-dev libpq-dev
+                                fi
                               '''
                             }
                             withEnv(["PATH=/tools:${env.PATH}"]) {
