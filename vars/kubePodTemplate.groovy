@@ -24,11 +24,11 @@ def call(Map config = [:], Closure body) {
         yaml = new SimpleTemplateEngine().createTemplate(config.yamlTemplate as String).make(vars).toString()
     }
 
-    podTemplate(
-            cloud: (config.get('cloud', 'self-managed') ?: 'self-managed') as String,
-            label: podLabel,
-            namespace: (config.get('namespace', 'devops-tools') ?: 'devops-tools') as String,
-            serviceAccount: (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
+    def templateArgs = [
+            cloud           : (config.get('cloud', 'self-managed') ?: 'self-managed') as String,
+            label           : podLabel,
+            namespace       : (config.get('namespace', 'devops-tools') ?: 'devops-tools') as String,
+            serviceAccount  : (config.get('serviceAccount', 'jenkins-admin') ?: 'jenkins-admin') as String,
             // NO idleMinutes: this cluster runs at 85-95% memory requests (limits
             // 190-243% over-committed), so holding idle warm agents starves new
             // heavy build pods -> FailedScheduling "Insufficient memory" and 7-min
@@ -36,9 +36,20 @@ def call(Map config = [:], Closure body) {
             // Warm-reuse via held pods is incompatible with a memory-saturated
             // cluster; the stable label above is kept (inert, free) so reuse can be
             // re-enabled per pipeline via idleMinutes if capacity is ever added.
-            idleMinutes: (config.get('idleMinutes', 0) as Integer),
-            yaml: yaml
-    ) {
+            idleMinutes     : (config.get('idleMinutes', 0) as Integer),
+            yaml            : yaml,
+    ]
+    // Images served by the private registry (nexus) need kubelet auth: the
+    // docker-hosted repo answers 401 to anonymous pulls. The secret holds the
+    // read-only ci-image-pull nexus account and lives in devops-tools
+    // (kubectl create secret docker-registry nexus-image-pull). Applied only
+    // when the template actually references a nexus image, so stock docker.io
+    // agents never depend on the secret existing.
+    if (yaml.contains('nexus.dada-tuda.ru')) {
+        templateArgs['imagePullSecrets'] = ['nexus-image-pull']
+    }
+
+    podTemplate(templateArgs) {
         // The in-cluster JNLP4 channel (agent -> jenkins svc:50000 over the Cilium
         // service VIP) drops mid-build when the Beget-MANAGED control plane / apiserver
         // flaps (observed: ClosedChannelException / "removed or offline" on builds that
