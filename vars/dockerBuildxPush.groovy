@@ -56,6 +56,10 @@ def call(Map args) {
     String metaFlag = metaFile ? "--metadata-file ${metaFile}" : ''
 
     String cacheTo = "--cache-to type=registry,ref=${cacheRef},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
+    // ignore-error on cache-from too: the first build of an image has no cache
+    // manifest yet, and buildkit refuses the whole build on the missing ref
+    // (console CI #8) instead of building cold as it does for a local cache.
+    String cacheFrom = "--cache-from type=registry,ref=${cacheRef},ignore-error=true"
     String buildxCmd = cacheMode == 'export-only' ? [
             'docker buildx build',
             baFlags,
@@ -65,7 +69,7 @@ def call(Map args) {
     ].findAll { it }.join(' ') : [
             'docker buildx build',
             baFlags,
-            "--cache-from type=registry,ref=${cacheRef}",
+            cacheFrom,
             cacheMode == 'inline' ? cacheTo : '',
             "-f ${dockerfile}",
             "-t ${image}",
