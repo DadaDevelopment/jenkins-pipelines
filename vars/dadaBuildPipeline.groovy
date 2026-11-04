@@ -69,7 +69,12 @@ spec:
 """
             }
         }
-        options { timeout(time: 20, unit: 'MINUTES'); disableConcurrentBuilds() }
+        // No disableConcurrentBuilds(): every build runs in its own pod with its
+        // own workspace and buildkitd sidecar, image tags carry BUILD_NUMBER, and
+        // same repo+branch races are resolved upstream by the build-agent
+        // (BUILD_MAX_CONCURRENT semaphore + supersession). Serializing this job
+        // made one slow clone or upload archive block every customer's build.
+        options { timeout(time: 20, unit: 'MINUTES') }
         parameters {
             string(name: 'repo',               defaultValue: '',      description: 'authenticated clone URL (sent by build-agent)')
             string(name: 'archive_url',        defaultValue: '',      description: 'presigned GET URL for an uploaded source archive (zip/tar.gz); when set this wins over repo/branch clone')
@@ -121,6 +126,10 @@ spec:
                 }
             }
             stage('clone') {
+                // Stage budget below the job-wide 20min backstop: a dead storage
+                // endpoint or a stalled GitHub link must fail this stage inside
+                // 10 minutes even with the retry, not eat the whole build.
+                options { timeout(time: 10, unit: 'MINUTES') }
                 steps {
                     retry(2) {
                     script {
@@ -128,7 +137,7 @@ spec:
                             sh '''
                                 set -e
                                 rm -rf src src.bin
-                                curl -fsSL "$archive_url" -o src.bin
+                                curl -fsSL --connect-timeout 15 --retry 2 --retry-delay 3 --retry-connrefused --max-time 300 "$archive_url" -o src.bin
                                 mkdir -p src
                                 MAGIC=$(head -c 4 src.bin | od -An -tx1 | tr -d ' \\n')
                                 case "$MAGIC" in
@@ -167,7 +176,7 @@ spec:
                                 fi
                             '''
                         } else {
-                            sh 'set -e; rm -rf src; git clone --depth 1 --branch "$branch" "$repo" src'
+                            sh 'set -e; rm -rf src; git -c http.lowSpeedLimit=2048 -c http.lowSpeedTime=60 clone --depth 1 --branch "$branch" "$repo" src'
                         }
                     }
                     }
