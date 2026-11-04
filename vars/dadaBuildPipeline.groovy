@@ -96,6 +96,13 @@ spec:
             string(name: 'app_port',           defaultValue: '',      description: 'listen port')
             string(name: '__proj',             defaultValue: '',      description: 'SMOKE-TEST ONLY identity override')
             string(name: '__app',              defaultValue: '',      description: 'SMOKE-TEST ONLY identity override')
+            // Build provenance for the Jenkins build list: who/why it was started
+            // and for whom. Sent by the build-agent; empty values (smoke tests)
+            // simply produce a shorter description line.
+            string(name: 'build_id',           defaultValue: '',      description: 'cloud-console builds.id UUID (join key for audit_events)')
+            string(name: 'trigger',            defaultValue: '',      description: 'push | pr | manual | rollback')
+            string(name: 'actor',              defaultValue: '',      description: 'who started it: user email or <provider>-webhook')
+            string(name: 'client',             defaultValue: '',      description: 'project owner email (best effort)')
         }
         stages {
             stage('resolve identity') {
@@ -122,6 +129,14 @@ spec:
                             echo "identity (db): ${env.PROJ}/${env.APP} rootdir=${env.ROOTDIR}"
                         }
                     }
+                    script {
+                        def parts = ["${env.PROJ}/${env.APP}"]
+                        if (params.trigger?.trim()) { parts << params.trigger.trim() }
+                        parts << "by ${(params.actor ?: 'unknown').trim()}"
+                        if (params.client?.trim() && params.client.trim() != params.actor?.trim()) { parts << "client ${params.client.trim()}" }
+                        if (params.build_id?.trim()) { parts << 'build ' + params.build_id.trim().take(8) }
+                        currentBuild.description = parts.join(' · ')
+                    }
                     }
                 }
             }
@@ -137,7 +152,12 @@ spec:
                             sh '''
                                 set -e
                                 rm -rf src src.bin
+                                # xtrace prints expanded arguments, and the archive URL
+                                # is a presigned credential: keep the download itself
+                                # out of the console. Same for the git clone below.
+                                { set +x; } 2>/dev/null
                                 curl -fsSL --connect-timeout 15 --retry 2 --retry-delay 3 --retry-connrefused --max-time 300 "$archive_url" -o src.bin
+                                { set -x; } 2>/dev/null
                                 mkdir -p src
                                 MAGIC=$(head -c 4 src.bin | od -An -tx1 | tr -d ' \\n')
                                 case "$MAGIC" in
@@ -176,7 +196,13 @@ spec:
                                 fi
                             '''
                         } else {
-                            sh 'set -e; rm -rf src; git -c http.lowSpeedLimit=2048 -c http.lowSpeedTime=60 clone --depth 1 --branch "$branch" "$repo" src'
+                            sh '''
+                                set -e
+                                rm -rf src
+                                { set +x; } 2>/dev/null
+                                git -c http.lowSpeedLimit=2048 -c http.lowSpeedTime=60 clone --depth 1 --branch "$branch" "$repo" src
+                                { set -x; } 2>/dev/null
+                            '''
                         }
                     }
                     }
