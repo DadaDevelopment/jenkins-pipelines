@@ -85,10 +85,19 @@ def call(Map args) {
                 unset AUTH
                 set -x
 
+                # Parallel branches of one build race here: several images build
+                # concurrently against the same pod-local builder, everyone
+                # fails `inspect` before the first `create` lands, and the
+                # losers would die on "existing instance". Losing the create
+                # race is fine — the winner registered the same endpoint.
                 docker buildx inspect jenkins >/dev/null 2>&1 || \\
-                    docker buildx create --name jenkins --driver remote ${bkAddr}
+                    docker buildx create --name jenkins --driver remote ${bkAddr} >/dev/null 2>&1 || true
                 docker buildx use jenkins
-                for i in \$(seq 1 30); do docker buildx inspect --bootstrap jenkins >/dev/null 2>&1 && break; sleep 1; done
+                if ! docker buildx inspect --bootstrap jenkins >/dev/null 2>&1; then
+                    for i in \$(seq 1 30); do docker buildx inspect --bootstrap jenkins >/dev/null 2>&1 && break; sleep 1; done
+                fi
+                docker buildx inspect --bootstrap jenkins >/dev/null 2>&1 || \\
+                    { echo "dockerBuildxPush: buildkitd at ${bkAddr} never became ready" >&2; exit 1; }
                 docker buildx inspect --bootstrap jenkins | head -n 8
 
                 T0=\$(date +%s)
