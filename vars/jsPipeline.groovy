@@ -24,7 +24,7 @@ def call(Map config) {
 
     // CI-failure -> AgentSync autofix webhook is on by default for every JS/TS
     // service; pass empty strings explicitly to opt a project out.
-    def FAILURE_WEBHOOK_URL = ((config.get('failureWebhookUrl', 'https://agent.dada-tuda.ru/v1/agentsync/events/ci-failed') ?: '') as String).trim()
+    def FAILURE_WEBHOOK_URL = ((config.get('failureWebhookUrl', 'http://agent-sync-hub-backend.argocd-prod.svc.cluster.local:8080/v1/agentsync/events/ci-failed') ?: '') as String).trim()
     def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', 'agentsync-ci-webhook-token') ?: '') as String).trim()
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
 

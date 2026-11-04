@@ -274,6 +274,50 @@ spec:
                 }
             }
         }
+        post {
+            failure {
+                // The landing promises AI auto-fix on CI failure. Git-based
+                // builds report to the AgentSync Hub, which opens a
+                // CI-BUGFIX workflow and (for repo builds) proposes a fix PR
+                // through the console UI. Archive (zip-upload) builds carry
+                // no git identity, so the hub has nothing to patch yet -
+                // they are skipped here until the FS-workspace flow ships.
+                script {
+                    if (!params.archive_url?.trim()) {
+                        def summary = currentBuild.description ?: 'dada-build failed'
+                        def payload = [
+                            repo_url       : (params.repo ?: '').replaceFirst('https://x-access-token:[^@]+@', 'https://'),
+                            branch         : (params.branch ?: 'main'),
+                            commit_sha     : (params.commit_sha ?: '').take(40) ?: 'unknown',
+                            job_name       : 'dada-build',
+                            build_number   : env.BUILD_NUMBER,
+                            build_url      : env.BUILD_URL,
+                            failed_stage   : (env.FAILED_STAGE ?: 'build & push'),
+                            failure_summary: summary,
+                            trace_id       : "dada-build#${env.BUILD_NUMBER}",
+                            idempotency_key: "dada-build:${env.BUILD_NUMBER}",
+                            project_slug   : (env.PROJ ?: params.project_slug ?: ''),
+                            app_name       : (env.APP ?: params.app_name ?: ''),
+                            build_id       : (params.build_id ?: ''),
+                        ]
+                        writeFile file: '.ci-failed-payload.json', text: groovy.json.JsonOutput.toJson(payload)
+                        withCredentials([string(credentialsId: 'agentsync-ci-webhook-token', variable: 'AGENTSYNC_TOKEN')]) {
+                            sh ''' + """"" + '''
+                                set +x
+                                curl -fsS --max-time 15 -X POST \
+                                  http://agent-sync-hub-backend.argocd-prod.svc.cluster.local:8080/v1/agentsync/events/ci-failed \
+                                  -H "Authorization: Bearer $AGENTSYNC_TOKEN" \
+                                  -H "Content-Type: application/json" \
+                                  --data-binary @.ci-failed-payload.json \
+                                || echo "agentsync ci-failed webhook failed (non-blocking)"
+                            ''' + """"" + '''
+                        }
+                    } else {
+                        echo "archive build: no git identity - agentsync ci-failed skipped (FS-workspace flow pending)"
+                    }
+                }
+            }
+        }
     }
 }
 
