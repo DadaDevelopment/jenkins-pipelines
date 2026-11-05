@@ -302,7 +302,7 @@ spec:
                         ]
                         writeFile file: '.ci-failed-payload.json', text: groovy.json.JsonOutput.toJson(payload)
                         withCredentials([string(credentialsId: 'agentsync-ci-webhook-token', variable: 'AGENTSYNC_TOKEN')]) {
-                            sh ''' + """"" + '''
+                            sh '''
                                 set +x
                                 curl -fsS --max-time 15 -X POST \
                                   http://agent-sync-hub-backend.argocd-prod.svc.cluster.local:8080/v1/agentsync/events/ci-failed \
@@ -310,7 +310,7 @@ spec:
                                   -H "Content-Type: application/json" \
                                   --data-binary @.ci-failed-payload.json \
                                 || echo "agentsync ci-failed webhook failed (non-blocking)"
-                            ''' + """"" + '''
+                            '''
                         }
                     } else {
                         echo "archive build: no git identity - agentsync ci-failed skipped (FS-workspace flow pending)"
