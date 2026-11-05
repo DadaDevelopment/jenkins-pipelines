@@ -220,6 +220,11 @@ spec:
                         }
                         env.CACHE_REF = env.IMG + ':buildcache-' + (params.branch ?: 'main').replaceAll('[^A-Za-z0-9_.-]', '-')
 
+                        def sourceEntries = sh(returnStdout: true, script: "find src -mindepth 1 2>/dev/null | head -3").trim()
+                        if (!sourceEntries) {
+                            error("the checkout is empty: branch '${params.branch ?: 'default'}' has no files to build — push code to the branch and rebuild")
+                        }
+
                         def dfName = ['Dockerfile', 'dockerfile'].find { fileExists(env.CTX + '/' + it) }
                         def dfPath = env.CTX + '/' + (dfName ?: 'Dockerfile')
                         env.DOCKERFILE_PATH = dfPath
@@ -243,7 +248,7 @@ spec:
                                 sources: pySources,
                             ])
                             if (df == null) {
-                                error("framework '${fw}' has no template and repo ships no Dockerfile — add a Dockerfile to the repo or extend dadaBuildPipeline")
+                                error("could not digest this source: no Dockerfile at the checkout root and no manifest the platform can build (package.json, go.mod, requirements.txt/pyproject.toml, index.html). Check that branch '${params.branch ?: 'default'}' actually contains the application, or extend dadaBuildPipeline")
                             }
                             writeFile file: dfPath, text: df
                             echo "no Dockerfile in repo — generated for framework='${fw}':\n--- ${dfPath} ---\n${df}-----------------"
@@ -365,6 +370,7 @@ def sniffFrameworkFromCheckout(String ctx) {
             echo python
             exit 0
         fi
+        if [ -f index.html ] || [ -f index.htm ]; then echo static; exit 0; fi
     """).trim()
 }
 
