@@ -248,6 +248,27 @@ spec:
                                 sources: pySources,
                             ])
                             if (df == null) {
+                                // Diagnose the empty-repo shape before the generic error: a
+                                // skeleton (README/.gitignore/docker-compose only) reads as
+                                // "forgot to push the code", not as "add a manifest" (CI dada-build
+                                // #86: compose said build:. + python -m app.main, repo held 3 files).
+                                def probe = sh(returnStdout: true, script: """
+                                    cd '${env.CTX}' 2>/dev/null || true
+                                    files=\$(find . -type f -not -path "./.git/*" 2>/dev/null | wc -l)
+                                    names=\$(find . -type f -not -path "./.git/*" 2>/dev/null | sed "s|.*/||" | sort -u | head -8 | paste -sd ',' -)
+                                    compose=\$(ls docker-compose.yml docker-compose.yaml compose.yml 2>/dev/null | head -1)
+                                    cmd=\$(grep -m1 "command:" docker-compose.yml docker-compose.yaml compose.yml 2>/dev/null | sed "s/.*command:[[:space:]]*//" | tr -d '"')
+                                    echo "\$files|\$names|\$compose|\$cmd"
+                                """).trim()
+                                def parts = probe.split("\\|", -1) as List
+                                def fileCount = parts[0] ?: '0'
+                                def fileNames = parts[1] ?: ''
+                                def composeFile = parts[2] ?: ''
+                                def composeCmd = parts[3] ?: ''
+                                def fileCountN = (fileCount as String).isNumber() ? fileCount.toInteger() : 0
+                                if (fileCountN <= 4 && composeFile) {
+                                    error("repo has no application code yet: only ${fileCountN} file(s) committed (${fileNames}); ${composeFile} expects 'build: .' with a Dockerfile and source in the repo${composeCmd ? ", and runs '${composeCmd}'" : ''} -- push the application code (plus requirements.txt/pyproject.toml) and rebuild")
+                                }
                                 error("could not digest this source: no Dockerfile at the checkout root and no manifest the platform can build (package.json, go.mod, requirements.txt/pyproject.toml, index.html). Check that branch '${params.branch ?: 'default'}' actually contains the application, or extend dadaBuildPipeline")
                             }
                             writeFile file: dfPath, text: df
