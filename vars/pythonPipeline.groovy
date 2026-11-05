@@ -133,6 +133,9 @@ def call(Map config) {
                                     sh """
                                         set -eux
                                         retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
+                                        uv self update || curl -LsSf https://astral.sh/uv/install.sh | sh || true
+                                        export PATH="\$HOME/.local/bin:\$PATH"
+                                        uv --version
                                         retry uv sync --locked --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER} || { sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==${PYTHON_VER}.*\\"/" pyproject.toml || true; retry uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}; }
                                         cp -f '${UV_SETTINGS}' ./uv.toml
                                     """
