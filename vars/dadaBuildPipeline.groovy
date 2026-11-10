@@ -34,6 +34,15 @@ spec:
   # them the right to evict anything.  The PriorityClass has value 100000 and
   # preemptionPolicy: Never; it is deliberately not `critical`.
   priorityClassName: ci-agent
+  # Hostman's load balancers cut any connection idle for 50s, and Nexus needs
+  # longer than that to answer a layer upload (its S3 blob store takes 1-4 MB/s
+  # from Frankfurt), so pushes over ~50 MB died with EOF. nginx waits for the
+  # upstream up to 600s, so agents reach the ingress controller's ClusterIP
+  # directly (same TLS, same Host header). Pinned in argo-infra:
+  # ingress-nginx-pub controller.service.clusterIP.
+  hostAliases:
+  - ip: 10.103.95.215
+    hostnames: ['nexus.dada-tuda.ru']
   containers:
   # Same digest kubePodTemplate pins and jenkins-warm-cache keeps on every node.
   # Left to the plugin default (a floating -jdk tag) it missed the node cache and
