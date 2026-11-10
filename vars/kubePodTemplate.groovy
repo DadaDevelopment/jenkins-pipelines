@@ -121,15 +121,6 @@ metadata:
     app.kubernetes.io/managed-by: jenkins
 spec:
   priorityClassName: ci-agent
-  # Hostman's load balancers cut any connection idle for 50s, and Nexus needs
-  # longer than that to answer a layer upload (its S3 blob store takes 1-4 MB/s
-  # from Frankfurt), so pushes over ~50 MB died with EOF. nginx waits for the
-  # upstream up to 600s, so agents reach the ingress controller's ClusterIP
-  # directly (same TLS, same Host header). Pinned in argo-infra:
-  # ingress-nginx-pub controller.service.clusterIP.
-  hostAliases:
-  - ip: 10.103.95.215
-    hostnames: ['nexus.dada-tuda.ru']
   # Resilience against cluster CoreDNS flaps (single-replica, overloaded):
   # ndots:1 stops search-domain expansion storms for external names like
   # nexus.dada-tuda.ru (otherwise 4+ queries x A/AAAA per lookup); attempts/timeout
@@ -271,15 +262,6 @@ metadata:
     app.kubernetes.io/managed-by: jenkins
 spec:
   priorityClassName: ci-agent
-  # Hostman's load balancers cut any connection idle for 50s, and Nexus needs
-  # longer than that to answer a layer upload (its S3 blob store takes 1-4 MB/s
-  # from Frankfurt), so pushes over ~50 MB died with EOF. nginx waits for the
-  # upstream up to 600s, so agents reach the ingress controller's ClusterIP
-  # directly (same TLS, same Host header). Pinned in argo-infra:
-  # ingress-nginx-pub controller.service.clusterIP.
-  hostAliases:
-  - ip: 10.103.95.215
-    hostnames: ['nexus.dada-tuda.ru']
   dnsConfig:
     options:
       - name: ndots
