@@ -14,6 +14,7 @@
 // are passed as parameters), so framework apps (Next.js, Vite, FastAPI, Go, …)
 // build without the user authoring a Dockerfile.
 
+import ru.dada.build.GoSite
 import ru.dada.build.PythonLaunch
 import ru.dada.build.RootDir
 import ru.dada.build.StaticSite
@@ -246,6 +247,7 @@ spec:
                                 output : (params.output_dir ?: '').trim(),
                                 port   : parsePort(params.app_port),
                                 sources: pySources,
+                                goMod  : (fw == 'go' && fileExists(env.CTX + '/go.mod')) ? readFile(env.CTX + '/go.mod') : '',
                             ])
                             if (df == null) {
                                 // Diagnose the empty-repo shape before the generic error: a
@@ -494,16 +496,7 @@ CMD ["sh","-c","${pyStart.replace('\\', '\\\\').replace('"', '\\"')}"]
 """
 
         case 'go':
-            int p = port ?: 8080
-            return """FROM golang:1.25 AS build
-WORKDIR /app
-COPY . .
-RUN CGO_ENABLED=0 go build -o /app/server .
-FROM gcr.io/distroless/base-debian12
-COPY --from=build /app/server /server
-EXPOSE ${p}
-CMD ["/server"]
-"""
+            return GoSite.dockerfile(port, (String) d.goMod)
 
         default:
             return null
