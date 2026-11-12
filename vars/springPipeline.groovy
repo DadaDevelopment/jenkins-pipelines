@@ -12,6 +12,8 @@ def call(Map config) {
     def infra = config.get("infra", false)
     def INFRA_PROJECT = ((config.get('infraProject', 'example-project') ?: 'example-project') as String).trim()
     def INFRA_ENV = ((config.get('infraEnv', 'prod') ?: 'prod') as String).trim()
+    def INFRA_CLUSTER = ((config.get('infraCluster', 'beget-prod') ?: 'beget-prod') as String).trim()
+    def INFRA_BRANCH = ((config.get('infraBranch', 'console-migration') ?: 'console-migration') as String).trim()
     def SUBMODULE = config.get('submodule', '')
     def JDK_IMAGE_VERSION = (((config.get('jdk', 'openjdk-17-jdk') as String).replaceAll('[^0-9]', '') ?: '17') as String).trim()
     def BUILDER_IMAGE = ((config.get('builderImage', "maven:3.9.9-eclipse-temurin-${JDK_IMAGE_VERSION}") ?: "maven:3.9.9-eclipse-temurin-${JDK_IMAGE_VERSION}") as String).trim()
@@ -58,9 +60,9 @@ def call(Map config) {
                         def authType
 
                         if (infra) {
-                            values = "clusters/beget-prod/projects/${INFRA_PROJECT}/environments/${INFRA_ENV}/apps/${PROJECT_NAME}/values.yaml"
+                            values = "clusters/${INFRA_CLUSTER}/projects/${INFRA_PROJECT}/environments/${INFRA_ENV}/apps/${PROJECT_NAME}/values.yaml"
                             repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
-                            branch = 'console-migration'
+                            branch = INFRA_BRANCH
                             credentialsId = 'gh-token'
                             authType = 'https'
                         } else {

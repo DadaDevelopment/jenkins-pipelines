@@ -38,6 +38,8 @@ def call(Map config) {
     def infra = config.get("infra", true)
     def INFRA_PROJECT = ((config.get('infraProject', 'example-project') ?: 'example-project') as String).trim()
     def INFRA_ENV = ((config.get('infraEnv', 'prod') ?: 'prod') as String).trim()
+    def INFRA_CLUSTER = ((config.get('infraCluster', 'beget-prod') ?: 'beget-prod') as String).trim()
+    def INFRA_BRANCH = ((config.get('infraBranch', 'console-migration') ?: 'console-migration') as String).trim()
 
     kubePodTemplate(
             builderProfile: 'go',
@@ -109,7 +111,7 @@ def call(Map config) {
                                 values = OVERRIDE_VALUES
                             } else {
                                 if (infra) {
-                                    values = "clusters/beget-prod/projects/${INFRA_PROJECT}/environments/${INFRA_ENV}/apps/${PROJECT_NAME}/values.yaml"
+                                    values = "clusters/${INFRA_CLUSTER}/projects/${INFRA_PROJECT}/environments/${INFRA_ENV}/apps/${PROJECT_NAME}/values.yaml"
                                 } else {
                                     if (!SPLIT_DEV_AND_PROD) {
                                         values = "helm/go/services/${PROJECT_NAME}/values.yaml"
@@ -153,7 +155,7 @@ def call(Map config) {
                             def credentialsId = 'gh-token'
 
                             if (infra) {
-                                branch = 'console-migration'
+                                branch = INFRA_BRANCH
                                 repoUrl = 'https://github.com/DadaDevelopment/argo-infra.git'
                             }
 
