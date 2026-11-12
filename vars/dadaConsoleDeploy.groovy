@@ -101,72 +101,92 @@ def call(Map args) {
                 }
 
                 printf '{"image":"%s"}' "$DADA_DEPLOY_IMAGE" > "$work/req.json"
-                attempt=1
-                while :; do
-                    code=$(http "$work/trigger.json" "$DADA_CONSOLE_URL/api/v1/deploy" "$work/req.json") || code=""
-                    if [ "$code" = "200" ] || [ "$code" = "202" ]; then
-                        break
-                    fi
-                    case "${code:-none}" in
-                        000|none|502|503) transient=1 ;;
-                        *) transient=0 ;;
-                    esac
-                    if [ "$transient" -eq 1 ] && [ "$attempt" -lt 15 ]; then
-                        echo "dadaConsoleDeploy: POST /api/v1/deploy returned HTTP ${code:-none}, console unavailable, retry $attempt/14 in 20s" >&2
-                        attempt=$((attempt + 1))
-                        sleep 20
-                        continue
-                    fi
-                    echo "dadaConsoleDeploy: POST /api/v1/deploy returned HTTP ${code:-none}: $(cat "$work/trigger.json" 2>/dev/null)" >&2
-                    exit 1
-                done
-
-                op=$(field "$work/trigger.json" operation_id)
-                if [ -z "$op" ]; then
-                    echo "dadaConsoleDeploy: no operation_id in response: $(cat "$work/trigger.json")" >&2
-                    exit 1
-                fi
-                echo "dadaConsoleDeploy: $DADA_DEPLOY_IMAGE -> operation $op"
-
-                deadline=$(( $(date +%s) + DADA_DEPLOY_WAIT ))
-                polls_failed=0
-                while :; do
-                    code=$(http "$work/op.json" "$DADA_CONSOLE_URL/api/v1/deploy/operations/$op") || code=""
-                    if [ "$code" != "200" ]; then
+                run_once() {
+                    attempt=1
+                    while :; do
+                        code=$(http "$work/trigger.json" "$DADA_CONSOLE_URL/api/v1/deploy" "$work/req.json") || code=""
+                        if [ "$code" = "200" ] || [ "$code" = "202" ]; then
+                            break
+                        fi
                         case "${code:-none}" in
-                            000|none|502|503|504) transient=1 ;;
+                            000|none|502|503) transient=1 ;;
                             *) transient=0 ;;
                         esac
-                        polls_failed=$((polls_failed + 1))
-                        if [ "$transient" -eq 1 ] && [ "$polls_failed" -lt 30 ] && [ "$(date +%s)" -lt "$deadline" ]; then
-                            echo "dadaConsoleDeploy: poll of operation $op returned HTTP ${code:-none}, console unavailable, retrying" >&2
-                            sleep "$DADA_DEPLOY_POLL"
+                        if [ "$transient" -eq 1 ] && [ "$attempt" -lt 15 ]; then
+                            echo "dadaConsoleDeploy: POST /api/v1/deploy returned HTTP ${code:-none}, console unavailable, retry $attempt/14 in 20s" >&2
+                            attempt=$((attempt + 1))
+                            sleep 20
                             continue
                         fi
-                        echo "dadaConsoleDeploy: poll of operation $op returned HTTP ${code:-none}: $(cat "$work/op.json" 2>/dev/null)" >&2
-                        exit 1
+                        echo "dadaConsoleDeploy: POST /api/v1/deploy returned HTTP ${code:-none}: $(cat "$work/trigger.json" 2>/dev/null)" >&2
+                        return 1
+                    done
+
+                    op=$(field "$work/trigger.json" operation_id)
+                    if [ -z "$op" ]; then
+                        echo "dadaConsoleDeploy: no operation_id in response: $(cat "$work/trigger.json")" >&2
+                        return 1
                     fi
+                    echo "dadaConsoleDeploy: $DADA_DEPLOY_IMAGE -> operation $op"
+
+                    deadline=$(( $(date +%s) + DADA_DEPLOY_WAIT ))
                     polls_failed=0
-
-                    state=$(field "$work/op.json" status)
-                    terminal=$(field "$work/op.json" terminal)
-                    ok=$(field "$work/op.json" ok)
-
-                    if [ "$terminal" = "true" ]; then
-                        if [ "$ok" = "true" ]; then
-                            echo "dadaConsoleDeploy: operation $op finished $state"
-                            exit 0
+                    while :; do
+                        code=$(http "$work/op.json" "$DADA_CONSOLE_URL/api/v1/deploy/operations/$op") || code=""
+                        if [ "$code" != "200" ]; then
+                            case "${code:-none}" in
+                                000|none|502|503|504) transient=1 ;;
+                                *) transient=0 ;;
+                            esac
+                            polls_failed=$((polls_failed + 1))
+                            if [ "$transient" -eq 1 ] && [ "$polls_failed" -lt 30 ] && [ "$(date +%s)" -lt "$deadline" ]; then
+                                echo "dadaConsoleDeploy: poll of operation $op returned HTTP ${code:-none}, console unavailable, retrying" >&2
+                                sleep "$DADA_DEPLOY_POLL"
+                                continue
+                            fi
+                            echo "dadaConsoleDeploy: poll of operation $op returned HTTP ${code:-none}: $(cat "$work/op.json" 2>/dev/null)" >&2
+                            return 1
                         fi
-                        echo "dadaConsoleDeploy: operation $op finished $state: $(cat "$work/op.json")" >&2
-                        exit 1
-                    fi
+                        polls_failed=0
 
-                    if [ "$(date +%s)" -ge "$deadline" ]; then
-                        echo "dadaConsoleDeploy: operation $op still $state after ${DADA_DEPLOY_WAIT}s; outcome unknown" >&2
-                        exit 1
-                    fi
+                        state=$(field "$work/op.json" status)
+                        terminal=$(field "$work/op.json" terminal)
+                        ok=$(field "$work/op.json" ok)
 
-                    sleep "$DADA_DEPLOY_POLL"
+                        if [ "$terminal" = "true" ]; then
+                            if [ "$ok" = "true" ]; then
+                                echo "dadaConsoleDeploy: operation $op finished $state"
+                                return 0
+                            fi
+                            echo "dadaConsoleDeploy: operation $op finished $state: $(cat "$work/op.json")" >&2
+                            if grep -q -E 'portainer did not finish redeploying|failed to resolve reference|i/o timeout' "$work/op.json" 2>/dev/null; then
+                                return 2
+                            fi
+                            return 1
+                        fi
+
+                        if [ "$(date +%s)" -ge "$deadline" ]; then
+                            echo "dadaConsoleDeploy: operation $op still $state after ${DADA_DEPLOY_WAIT}s; outcome unknown" >&2
+                            return 1
+                        fi
+
+                        sleep "$DADA_DEPLOY_POLL"
+                    done
+                }
+
+                tries=1
+                while :; do
+                    run_once && rc=0 || rc=$?
+                    if [ "$rc" -eq 0 ]; then
+                        exit 0
+                    fi
+                    if [ "$rc" -eq 2 ] && [ "$tries" -lt 2 ]; then
+                        tries=$((tries + 1))
+                        echo "dadaConsoleDeploy: the VM stack redeploy failed on a registry pull or timeout, triggering the deploy again (attempt $tries/2)" >&2
+                        sleep 15
+                        continue
+                    fi
+                    exit 1
                 done
             '''
         }
