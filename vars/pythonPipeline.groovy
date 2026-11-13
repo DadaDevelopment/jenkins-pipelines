@@ -132,15 +132,32 @@ def call(Map config) {
                         if (useUv) {
                             runStage('Install deps - uv') {
                                 withCredentials([file(credentialsId: 'uv-nexus-settings', variable: 'UV_SETTINGS')]) {
-                                    sh """
-                                        set -eux
-                                        retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
-                                        uv self update || curl -LsSf https://astral.sh/uv/install.sh | sh || true
-                                        export PATH="\$HOME/.local/bin:\$PATH"
-                                        uv --version
-                                        retry uv sync --locked --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER} || { sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==${PYTHON_VER}.*\\"/" pyproject.toml || true; retry uv sync --link-mode=copy --config-file='${UV_SETTINGS}' --all-extras --python ${PYTHON_VER}; }
-                                        cp -f '${UV_SETTINGS}' ./uv.toml
-                                    """
+                                    withEnv(["UV_PYTHON=${PYTHON_VER}"]) {
+                                        sh '''
+                                            set -eux
+                                            retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
+                                            uv --version
+                                            uv_sync_locked() { uv sync --locked --config-file="$UV_SETTINGS" --all-extras --python "$UV_PYTHON"; }
+                                            if [ ! -f uv.lock ]; then
+                                                echo '[uv-lock] no uv.lock in the repo - syncing unlocked; run `uv lock` in the repo and commit uv.lock to make builds reproducible' >&2
+                                                sed -i "s/^requires-python *= *\"[^\"]*\"/requires-python = \"==$UV_PYTHON.*\"/" pyproject.toml
+                                                retry uv sync --config-file="$UV_SETTINGS" --all-extras --python "$UV_PYTHON"
+                                            elif out=$(uv_sync_locked 2>&1); then
+                                                printf '%s\n' "$out"
+                                            else
+                                                printf '%s\n' "$out"
+                                                if printf '%s' "$out" | grep -qE 'needs to be updated|requires-python'; then
+                                                    echo '[uv-lock] uv.lock is stale vs pyproject.toml - failing fast after one resolve, syncing unlocked; run `uv lock` in the repo and commit uv.lock' >&2
+                                                    sed -i "s/^requires-python *= *\"[^\"]*\"/requires-python = \"==$UV_PYTHON.*\"/" pyproject.toml
+                                                    retry uv sync --config-file="$UV_SETTINGS" --all-extras --python "$UV_PYTHON"
+                                                else
+                                                    echo '[uv-lock] uv sync failure does not look lock-related - retrying as transient' >&2
+                                                    retry uv_sync_locked
+                                                fi
+                                            fi
+                                            cp -f "$UV_SETTINGS" ./uv.toml
+                                        '''
+                                    }
                                 }
                             }
                         } else {
@@ -222,7 +239,7 @@ def call(Map config) {
                                         retry uv pip install build
                                         python -m build
                                         if [ -f uv.toml ]; then
-                                            retry uv sync --link-mode=copy --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
+                                            retry uv sync --config-file=uv.toml --all-extras --python ${PYTHON_VER} --no-extra dev
                                         fi
                                     """
                                 }
