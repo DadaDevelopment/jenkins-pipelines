@@ -190,9 +190,11 @@ def call(Map config) {
                                   fi
                                 }
 
+                                typecheck_done=0
                                 if has_script typecheck; then
                                   echo "Running typecheck"
                                   run_pm typecheck
+                                  typecheck_done=1
                                 else
                                   echo "No typecheck script — skip"
                                 fi
@@ -204,7 +206,10 @@ def call(Map config) {
                                   echo "No lint script — skip"
                                 fi
 
-                                if has_script build; then
+                                if [ "$typecheck_done" = "1" ] && has_script build:fast; then
+                                  echo "Running build:fast (typecheck already ran)"
+                                  run_pm build:fast
+                                elif has_script build; then
                                   echo "Running build"
                                   run_pm build
                                 else
