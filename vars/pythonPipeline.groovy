@@ -17,7 +17,7 @@ def call(Map config) {
     def FAILURE_WEBHOOK_TOKEN_CREDENTIAL_ID = ((config.get('failureWebhookTokenCredentialId', 'agentsync-ci-webhook-token') ?: '') as String).trim()
     def FAILURE_WEBHOOK_AUTH_SCHEME = ((config.get('failureWebhookAuthScheme', 'Bearer') ?: 'Bearer') as String).trim()
     def OVERRIDE_VALUES =  config.get('values_override', '')
-    def BUILDER_IMAGE = ((config.get('builderImage', "nexus.dada-tuda.ru/ci/ghcr.io/astral-sh/uv:python${PYTHON_VER}-trixie-slim") ?: '') as String).trim()
+    def BUILDER_IMAGE = ((config.get('builderImage', "ghcr.io/astral-sh/uv:python${PYTHON_VER}-trixie-slim") ?: '') as String).trim()
     // Match the reachable Debian mirror used by service Docker builds; allow an override.
     def APT_MIRROR = (config.get('aptMirror', 'https://mirror.yandex.ru') as String).trim().replaceAll('/+$', '')
     def infra = config.get("infra", false)
