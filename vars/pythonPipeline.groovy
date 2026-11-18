@@ -165,32 +165,34 @@ def call(Map config) {
                         }
 
                         runStage("Test & Lint") {
-                            sh """
-                                set -eux
-                                retry() { i=0; until "\$@"; do i=\$((i+1)); [ "\$i" -ge 6 ] && { echo "FATAL: '\$*' failed after \$i attempts" >&2; return 1; }; echo "[net-retry \$i/6] '\$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
-                                if [ -f ".venv/bin/activate" ]; then
-                                    . .venv/bin/activate
-                                elif [ -f "venv/bin/activate" ]; then
-                                    . venv/bin/activate
-                                else
-                                    echo "⚠️  No virtualenv (.venv or venv) found — cannot run tests"
-                                    exit 0
-                                fi
+                            withEnv(["PYTHONPATH=${env.WORKSPACE}"]) {
+                                sh '''
+                                    set -eux
+                                    retry() { i=0; until "$@"; do i=$((i+1)); [ "$i" -ge 6 ] && { echo "FATAL: '$*' failed after $i attempts" >&2; return 1; }; echo "[net-retry $i/6] '$*' failed (likely transient DNS), sleeping 15s..." >&2; sleep 15; done; }
+                                    if [ -f ".venv/bin/activate" ]; then
+                                        . .venv/bin/activate
+                                    elif [ -f "venv/bin/activate" ]; then
+                                        . venv/bin/activate
+                                    else
+                                        echo "No virtualenv (.venv or venv) found - cannot run tests"
+                                        exit 0
+                                    fi
 
-                                export PYTHONPATH="\$PWD:\${PYTHONPATH:-}"
+                                    echo "Checking for tests..."
+                                    TEST_DIRS=$(find . -maxdepth 2 -type d \( -name "tests" -o -name "test" \) || true)
+                                    TEST_FILES=$(find . -maxdepth 3 -type f \( -name "test_*.py" -o -name "*_test.py" \) || true)
 
-                                echo "Checking for tests..."
-                                TEST_DIRS=\$(find . -maxdepth 2 -type d \\( -name "tests" -o -name "test" \\) || true)
-                                TEST_FILES=\$(find . -maxdepth 3 -type f \\( -name "test_*.py" -o -name "*_test.py" \\) || true)
+                                    if [ -z "$TEST_DIRS" ] && [ -z "$TEST_FILES" ]; then
+                                        echo "No tests found - skipping pytest"
+                                    else
+                                        echo "Tests detected - running pytest"
+                                        retry uv pip install pytest pytest-cov pytest-asyncio testcontainers
+                                        uv run pytest --junitxml test-results.xml
+                                    fi
+                                '''
+                            }
 
-                                if [ -z "\$TEST_DIRS" ] && [ -z "\$TEST_FILES" ]; then
-                                    echo "⚠️  No tests found — skipping pytest"
-                                else
-                                    echo "✓ Tests detected — running pytest"
-                                    retry uv pip install pytest pytest-cov pytest-asyncio testcontainers
-                                    uv run pytest --junitxml test-results.xml
-                                fi
-                            """
+                            if (fileExists('test-results.xml')) {
 
                             if (fileExists('test-results.xml')) {
                                 junit testResults: 'test-results.xml', skipPublishingChecks: true
