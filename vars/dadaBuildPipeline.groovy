@@ -41,11 +41,17 @@ spec:
   # cost a 6.7s pull on #317.
   - name: jnlp
     image: jenkins/inbound-agent@sha256:65b16b388a32be41d95134a5be7ce58e20fbc4d862e12f021ae64bf83bd5fe7d
+    resources:
+      requests: {cpu: 20m, memory: 128Mi}
+      limits: {memory: 768Mi}
   - name: docker
     image: docker:24-cli
     command: ['sleep']
     args: ['infinity']
     tty: true
+    resources:
+      requests: {cpu: 5m, memory: 32Mi}
+      limits: {memory: 512Mi}
   # buildx remote driver target. kubelet pulls this image, so the node copy that
   # jenkins-warm-cache pins is reused; a buildkit started inside dind pulled it
   # into dind's own store on every build (7s) and waited for dockerd (10s).
@@ -55,6 +61,9 @@ spec:
     args: ['--addr', 'tcp://127.0.0.1:1234']
     securityContext:
       privileged: true
+    resources:
+      requests: {cpu: 50m, memory: 96Mi}
+      limits: {memory: 3Gi}
     volumeMounts:
     - name: buildkit-state
       mountPath: /var/lib/buildkit
@@ -63,6 +72,9 @@ spec:
     command: ['sleep']
     args: ['infinity']
     tty: true
+    resources:
+      requests: {cpu: 1m, memory: 4Mi}
+      limits: {memory: 64Mi}
   volumes:
   - name: buildkit-state
     emptyDir:
