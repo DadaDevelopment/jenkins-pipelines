@@ -8,6 +8,11 @@
  * (`--cache-from`) and reuses layers + package caches across pods, instead of
  * the previous emptyDir graph store that was discarded when the agent pod died.
  *
+ * A registry cache can outlive the blobs it points at (Nexus lost its blobstore on 2026-11-17
+ * but kept the ':buildcache-*' manifests), which fails the push with "could not fetch content
+ * descriptor ... not found" on every identical retry. Retries therefore drop --cache-from and
+ * build cold; --cache-to still runs and overwrites the dead cache.
+ *
  * Must run inside `container('docker')`. Logs `BUILD_SECONDS=<n>` for the pure
  * build+push span so build duration can be measured from the console log.
  *
@@ -77,8 +82,10 @@ def call(Map args) {
             "${outputFlag} ${context}",
     ].findAll { it }.join(' ')
 
+    String coldCmd = buildxCmd.replace(cacheFrom + ' ', '')
+
     if (bkAddr) {
-        String runFrag = cacheMode == 'export-only' ? exportOnlyRun(buildxCmd) : retriedRun(buildxCmd)
+        String runFrag = cacheMode == 'export-only' ? exportOnlyRun(buildxCmd) : retriedRun(buildxCmd, coldCmd)
         withCredentials([usernamePassword(credentialsId: credId, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_LOGIN')]) {
             sh """
                 set -eu
@@ -123,12 +130,12 @@ def call(Map args) {
 
             T0=\$(date +%s)
             attempt=1; max=3
-            until ${buildxCmd}; do
+            until if [ \$attempt -le 1 ]; then ${buildxCmd}; else ${coldCmd}; fi; do
                 if [ \$attempt -ge \$max ]; then
                     echo "dockerBuildxPush: build+push failed after \$attempt attempts" >&2
                     exit 1
                 fi
-                echo "[push-retry \$attempt/\$((max-1))] buildx build+push failed (often a transient nexus registry 'digest mismatch' on a large layer); retrying in 10s..." >&2
+                echo "[push-retry \$attempt/\$((max-1))] buildx build+push failed (often a transient nexus registry 'digest mismatch' on a large layer, or a registry cache whose blobs are gone); retrying in 10s without --cache-from..." >&2
                 attempt=\$((attempt+1)); sleep 10
             done
             echo "BUILD_SECONDS=\$(( \$(date +%s) - T0 ))"
@@ -139,16 +146,19 @@ def call(Map args) {
 /**
  * Shell fragment: run a buildx build+push up to 3 times (Nexus sometimes answers a
  * large layer with a transient 'digest mismatch'), then log BUILD_SECONDS from T0.
+ * The first attempt imports the registry cache; retries run coldCmd, the same build
+ * without --cache-from, so a cache pointing at blobs the registry lost cannot fail
+ * every attempt the same way.
  */
 @NonCPS
-String retriedRun(String buildxCmd) {
+String retriedRun(String buildxCmd, String coldCmd) {
     return """attempt=1; max=3
-                until ${buildxCmd}; do
+                until if [ \$attempt -le 1 ]; then ${buildxCmd}; else ${coldCmd}; fi; do
                     if [ \$attempt -ge \$max ]; then
                         echo "dockerBuildxPush: build+push failed after \$attempt attempts" >&2
                         exit 1
                     fi
-                    echo "[push-retry \$attempt/\$((max-1))] buildx build+push failed (often a transient nexus registry 'digest mismatch' on a large layer); retrying in 10s..." >&2
+                    echo "[push-retry \$attempt/\$((max-1))] buildx build+push failed (often a transient nexus registry 'digest mismatch' on a large layer, or a registry cache whose blobs are gone); retrying in 10s without --cache-from..." >&2
                     attempt=\$((attempt+1)); sleep 10
                 done
                 echo "BUILD_SECONDS=\$(( \$(date +%s) - T0 ))"
