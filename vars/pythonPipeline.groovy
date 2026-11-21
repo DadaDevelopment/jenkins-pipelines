@@ -179,8 +179,8 @@ def call(Map config) {
                                     fi
 
                                     echo "Checking for tests..."
-                                    TEST_DIRS=$(find . -maxdepth 2 -type d \( -name "tests" -o -name "test" \) || true)
-                                    TEST_FILES=$(find . -maxdepth 3 -type f \( -name "test_*.py" -o -name "*_test.py" \) || true)
+                                    TEST_DIRS=$(find . -maxdepth 2 -type d \\( -name "tests" -o -name "test" \\) || true)
+                                    TEST_FILES=$(find . -maxdepth 3 -type f \\( -name "test_*.py" -o -name "*_test.py" \\) || true)
 
                                     if [ -z "$TEST_DIRS" ] && [ -z "$TEST_FILES" ]; then
                                         echo "No tests found - skipping pytest"
@@ -192,7 +192,6 @@ def call(Map config) {
                                 '''
                             }
 
-                            if (fileExists('test-results.xml')) {
 
                             if (fileExists('test-results.xml')) {
                                 junit testResults: 'test-results.xml', skipPublishingChecks: true
