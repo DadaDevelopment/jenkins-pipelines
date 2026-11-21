@@ -140,15 +140,15 @@ def call(Map config) {
                                             uv_sync_locked() { uv sync --locked --config-file="$UV_SETTINGS" --all-extras --python "$UV_PYTHON"; }
                                             if [ ! -f uv.lock ]; then
                                                 echo '[uv-lock] no uv.lock in the repo - syncing unlocked; run `uv lock` in the repo and commit uv.lock to make builds reproducible' >&2
-                                                sed -i "s/^requires-python *= *\"[^\"]*\"/requires-python = \"==$UV_PYTHON.*\"/" pyproject.toml
+                                                sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==$UV_PYTHON.*\\"/" pyproject.toml
                                                 retry uv sync --config-file="$UV_SETTINGS" --all-extras --python "$UV_PYTHON"
                                             elif out=$(uv_sync_locked 2>&1); then
-                                                printf '%s\n' "$out"
+                                                printf '%s\\n' "$out"
                                             else
-                                                printf '%s\n' "$out"
+                                                printf '%s\\n' "$out"
                                                 if printf '%s' "$out" | grep -qE 'needs to be updated|requires-python'; then
                                                     echo '[uv-lock] uv.lock is stale vs pyproject.toml - failing fast after one resolve, syncing unlocked; run `uv lock` in the repo and commit uv.lock' >&2
-                                                    sed -i "s/^requires-python *= *\"[^\"]*\"/requires-python = \"==$UV_PYTHON.*\"/" pyproject.toml
+                                                    sed -i "s/^requires-python *= *\\"[^\\"]*\\"/requires-python = \\"==$UV_PYTHON.*\\"/" pyproject.toml
                                                     retry uv sync --config-file="$UV_SETTINGS" --all-extras --python "$UV_PYTHON"
                                                 else
                                                     echo '[uv-lock] uv sync failure does not look lock-related - retrying as transient' >&2
